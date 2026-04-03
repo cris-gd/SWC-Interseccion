@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Intersección</title>
+    <link rel="stylesheet" href="css/styles3.css" id="hoja">
+</head>
+<body>
+
+<header>
+    <img src="img/logo.jpeg" alt="SWC Traffic Control" class="logo">
+    <div class="header-text">
+        <h1>Proyecto <span>SWC</span>: Gestión de Intersección</h1>
+        <p class="slogan">Controla el tráfico a tu gusto</p>
+        <span class="authors">AGUIRRE_ZAZO+GARCIA_DOMINGO</span>
+    </div>
+</header>
+
+<main>
+    <aside class="control-panel">
+        <div class="panel-title">Panel de Control</div>
+       
+        <!-- ── Volumen de tráfico ── -->
+        <div class="vol-block">
+          <div class="vol-block-title">Volumen de tráfico</div>
+       
+          <!-- NORTE -->
+          <div class="vol-group">
+            <div class="vol-group-header">N</div>
+            <div class="vol-row"><span class="vol-dest">→S</span><input type="range" id="slider-N-S" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-N-S">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→O</span><input type="range" id="slider-N-O" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-N-O">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→E</span><input type="range" id="slider-N-E" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-N-E">0</span></div>
+          </div>
+       
+          <!-- SUR -->
+          <div class="vol-group">
+            <div class="vol-group-header">S</div>
+            <div class="vol-row"><span class="vol-dest">→N</span><input type="range" id="slider-S-N" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-S-N">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→E</span><input type="range" id="slider-S-E" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-S-E">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→O</span><input type="range" id="slider-S-O" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-S-O">0</span></div>
+          </div>
+       
+          <!-- OESTE -->
+          <div class="vol-group">
+            <div class="vol-group-header">O</div>
+            <div class="vol-row"><span class="vol-dest">→E</span><input type="range" id="slider-O-E" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-O-E">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→N</span><input type="range" id="slider-O-N" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-O-N">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→S</span><input type="range" id="slider-O-S" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-O-S">0</span></div>
+          </div>
+       
+          <!-- ESTE -->
+          <div class="vol-group">
+            <div class="vol-group-header">E</div>
+            <div class="vol-row"><span class="vol-dest">→O</span><input type="range" id="slider-E-O" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-E-O">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→S</span><input type="range" id="slider-E-S" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-E-S">0</span></div>
+            <div class="vol-row"><span class="vol-dest">→N</span><input type="range" id="slider-E-N" class="vol-slider" min="0" max="5" step="1" value="0"><span class="vol-label" id="label-E-N">0</span></div>
+          </div>
+        </div>
+       
+        <!-- ── Botones de peatones ── -->
+        <div class="vol-block">
+          <div class="vol-block-title">Paso de peatones</div>
+          <div class="peatones-grid">
+            <button id="boton-peatones-N" class="boton-peatones">N</button>
+            <button id="boton-peatones-S" class="boton-peatones">S</button>
+            <button id="boton-peatones-E" class="boton-peatones">E</button>
+            <button id="boton-peatones-O" class="boton-peatones">O</button>
+          </div>
+        </div>
+    </aside>
+
+    <div class="intersection-viewport">
+        <!--
+        ════════════════════════════════════════════════════════
+            he cambiado tmb los numeros de aqui
+          SVG coordinate system  (viewBox 0 0 680 680)
+          Road H band : y  230 – 450   (220 px = 4 lanes × 55 px)
+          Road V band : x  230 – 450
+          Centreline  : (340, 340)
+
+          Lane centres measured from centreline (340):
+            Outer (S/R): ±27  → 313 / 367
+            Inner (IZQ): ±82  → 258 / 422
+
+          Traffic-light housings: 14 px wide × 46 px tall
+          Each approach has exactly 2 TLs.
+          They are placed strictly OUTSIDE the intersection box
+          (y < 230 for N, y > 450 for S, x < 230 for W, x > 450 for E).
+          The two TLs per approach are separated by ≥ 20 px gap.
+        ════════════════════════════════════════════════════════
+        -->
+        <svg id="intersection-svg" viewBox="-40 -40 960 760" xmlns="http://www.w3.org/2000/svg">
+
+            <!-- GRASS -->
+            <rect class="grass" x="-40" y="-40" width="960" height="760"/>
+
+            <!-- KERB LIP -->
+            <rect class="kerb" x="-40" y="227" width="960" height="226"/>
+            <rect class="kerb" x="227" y="-40" width="226" height="760"/>
+
+            <!-- ROAD SURFACE -->
+            <rect class="road" x="-40" y="230" width="960" height="220"/>
+            <rect class="road" x="230" y="-40" width="220" height="760"/>
+            <rect class="road-center" x="230" y="230" width="220" height="220"/>
+
+            <!-- YELLOW CENTRE LINES -->
+            <line class="centre-line" x1="-40" y1="340" x2="230" y2="340"/>
+            <line class="centre-line" x1="450" y1="340" x2="960" y2="340"/>
+            <line class="centre-line" x1="340" y1="-40" x2="340" y2="230"/>
+            <line class="centre-line" x1="340" y1="450" x2="340" y2="720"/>
+
+            <!-- WHITE LANE DIVIDERS -->
+            <line class="lane-divider" x1="-40" y1="285" x2="230" y2="285"/>
+            <line class="lane-divider" x1="-40" y1="395" x2="230" y2="395"/>
+            <line class="lane-divider" x1="450" y1="285" x2="960" y2="285"/>
+            <line class="lane-divider" x1="450" y1="395" x2="960" y2="395"/>
+            <line class="lane-divider" x1="285" y1="-40" x2="285" y2="230"/>
+            <line class="lane-divider" x1="395" y1="-40" x2="395" y2="230"/>
+            <line class="lane-divider" x1="285" y1="450" x2="285" y2="720"/>
+            <line class="lane-divider" x1="395" y1="450" x2="395" y2="720"/>
+
+            <!-- ── ZEBRA CROSSINGS ── -->
+            <!-- Cada franja: 10px ancho, hueco 8px. Cruzan todo el ancho de la calzada (230px). -->
+            <!-- Franjas verticales (N y S): x de 230 a 450, altura 18px -->
+            <!-- Franjas horizontales (E y O): y de 230 a 450, anchura 18px -->
+
+            <!-- NORTE: paso de cebra horizontal en y=210..228, cruza x=230..450 -->
+            <g class="zebra">
+                <rect x="230" y="50" width="18" height="30"/>
+                <rect x="262" y="50" width="18" height="30"/>
+                <rect x="294" y="50" width="18" height="30"/>
+                <rect x="326" y="50" width="18" height="30"/>
+                <rect x="358" y="50" width="18" height="30"/>
+                <rect x="390" y="50" width="18" height="30"/>
+                <rect x="422" y="50" width="18" height="30"/>
+            </g>
+
+            <!-- SUR: paso de cebra horizontal en y=452..470, cruza x=230..450 -->
+            <g class="zebra">
+                <rect x="238" y="580" width="18" height="30"/>
+                <rect x="270" y="580" width="18" height="30"/>
+                <rect x="302" y="580" width="18" height="30"/>
+                <rect x="334" y="580" width="18" height="30"/>
+                <rect x="366" y="580" width="18" height="30"/>
+                <rect x="398" y="580" width="18" height="30"/>
+                <rect x="430" y="580" width="18" height="30"/>
+            </g>
+
+            <!-- OESTE: paso de cebra vertical en x=210..228, cruza y=230..450 -->
+            <g class="zebra">
+                <rect x="50" y="230" width="30" height="18"/>
+                <rect x="50" y="262" width="30" height="18"/>
+                <rect x="50" y="294" width="30" height="18"/>
+                <rect x="50" y="326" width="30" height="18"/>
+                <rect x="50" y="358" width="30" height="18"/>
+                <rect x="50" y="390" width="30" height="18"/>
+                <rect x="50" y="422" width="30" height="18"/>
+            </g>
+
+            <!-- ESTE: paso de cebra vertical en x=452..470, cruza y=230..450 -->
+            <g class="zebra">
+                <rect x="590" y="238" width="30" height="18"/>
+                <rect x="590" y="270" width="30" height="18"/>
+                <rect x="590" y="302" width="30" height="18"/>
+                <rect x="590" y="334" width="30" height="18"/>
+                <rect x="590" y="366" width="30" height="18"/>
+                <rect x="590" y="398" width="30" height="18"/>
+                <rect x="590" y="430" width="30" height="18"/>
+            </g>
+
+            <!-- STOP LINES -->
+            <!-- N: lanes going S, x=230..340, stop at y=230 -->
+            <line class="stop-line" x1="230" y1="230" x2="340" y2="230"/>
+            <!-- S: lanes going N, x=340..450, stop at y=450 -->
+            <line class="stop-line" x1="340" y1="450" x2="450" y2="450"/>
+            <!-- O: lanes going E, y=230..340, stop at x=230 -->
+            <line class="stop-line" x1="230" y1="340" x2="230" y2="450"/>
+            <!-- E: lanes going O, y=340..450, stop at x=450 -->
+            <line class="stop-line" x1="450" y1="230" x2="450" y2="340"/>
+
+            <!-- ── DIRECTION ARROWS ── -->
+
+            <!-- N approach (going S): outer x=313, inner x=258 -->
+            <!-- outer: straight + right -->
+            <g transform="translate(258,185)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+                <g transform="translate(-5,3) rotate(90)">
+                    <polygon points="0,12 4,4 2,4 2,-5 -2,-5 -2,4 -4,4"/>
+                </g>
+            </g>
+            <!-- inner: left only -->
+            <g transform="translate(313,185) rotate(-90)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+            </g>
+
+            <!-- S approach (going N): outer x=367, inner x=422 -->
+            <g transform="translate(422,495) rotate(180)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+                <g transform="translate(-5,3) rotate(90)">
+                    <polygon points="0,12 4,4 2,4 2,-5 -2,-5 -2,4 -4,4"/>
+                </g>
+            </g>
+            <g transform="translate(367,495) rotate(90)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+            </g>
+
+            <!-- O approach (going E): outer y=313, inner y=258 -->
+            <g transform="translate(185,422) rotate(-90)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+                <g transform="translate(-5,3) rotate(+90)">
+                    <polygon points="0,12 4,4 2,4 2,-5 -2,-5 -2,4 -4,4"/>
+                </g>
+            </g>
+            <g transform="translate(185,367) rotate(180)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+            </g>
+
+            <!-- E approach (going O): outer y=367, inner y=422 -->
+            <g transform="translate(495,258) rotate(90)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7"/>
+                <g transform="translate(-5,3) rotate(+90)">
+                    <polygon points="0,12 4,4 2,4 2,-5 -2,-5 -2,4 -4,4"/>
+                </g>
+            </g>
+            <g transform="translate(495,313) rotate(180)" class="direction-arrow">
+                <polygon points="0,16 4.5,7 2.5,7 2.5,-9 -2.5,-9 -2.5,7 -4.5,7" transform="rotate(180)"/>
+            </g>
+
+            <!-- ══════════════════════════════════════════
+                 TRAFFIC LIGHTS
+                 he cambiado las x e y, no es como aqui
+
+                 TL housing: 14 w × 46 h,  lights at cy 10/23/36
+                 Pole: line from housing edge toward road.
+
+                 N approach  (entering top, going S)
+                   Stop line: y=230
+                   TL tops at y=148  → base at y=194  → pole to y=228
+                   S/R  at x=210
+                   IZQ  at x=335
+                   Horizontal gap: 309-210-14 = 111 px
+
+                 S approach  (entering bottom, going N)
+                   Stop line: y=450
+                   TL tops at y=458  → base y=504  → pole up to y=452
+                   S/R  at x=330
+                   IZQ  at x=418
+                   Gap: 418-330-14 = 44 px
+
+                 O approach  (entering left, going E)
+                   Stop line: x=230
+                   TL housings rotated 90°.
+                   S/R  centre at y=313 → housing top-left (x=148, y=306)
+                   IZQ  centre at y=258 → housing top-left (x=148, y=251)
+                   After rotate(90°,7,23): occupies x≈125..171, y≈288..332 and y≈234..278
+                   Gap between them: 288-278 = 10? — let's give more room:
+                   IZQ at y=244, S/R at y=299 → gap = 299-244-14 = 41 px ✓
+
+                 E approach  (entering right, going W)
+                   Stop line: x=450
+                   TL housings rotated -90°.
+                   S/R  centre at y=367 → (x=468, y=360)
+                   IZQ  centre at y=422 → (x=468, y=415)
+                   Gap: 415-360-14 = 41 px  ✓
+            ══════════════════════════════════════════ -->
+
+            <!-- ═ N: S at (210,148) ═ -->
+            <g id="tl-N-S" transform="translate(213,148) rotate(180,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-N-S-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-N-S-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-N-S-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ N: O ═ -->
+            <g id="tl-N-O" transform="translate(196,148) rotate(180,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-N-O-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-N-O-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-N-O-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ N: E at (335,148) ═ -->
+            <g id="tl-N-E" transform="translate(335,148) rotate(180,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-N-E-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-N-E-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-N-E-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ S: N at (330,458) — pole points UP ═ -->
+            <g id="tl-S-N" transform="translate(453,480)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-S-N-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-S-N-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-S-N-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ S: E at (330,458) ═ -->
+            <g id="tl-S-E" transform="translate(470,480)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-S-E-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-S-E-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-S-E-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ S: O at (418,458) ═ -->
+            <g id="tl-S-O" transform="translate(330,480)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-S-O-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-S-O-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-S-O-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ O: E  — rotate 90° around housing centre so lights read top=R ═
+                 Unrotated housing at (148, 299). rotate(90, 7, 23) makes it horizontal,
+                 lights ordered R (top→left), pole points right toward road. -->
+            <g id="tl-O-E" transform="translate(148,438) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-O-E-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-O-E-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-O-E-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ O: S at (148, 244) ═ -->
+            <g id="tl-O-S" transform="translate(148,455) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-O-S-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-O-S-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-O-S-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ O: N at (148, 244) ═ -->
+            <g id="tl-O-N" transform="translate(148,313) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-O-N-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-O-N-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-O-N-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ E: O at (468, 360) rotate(-90) ═ -->
+            <g id="tl-E-O" transform="translate(515,197) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-E-O-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-E-O-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-E-O-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ E: N at (468, 360) ═ -->
+            <g id="tl-E-N" transform="translate(515,180) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-E-N-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-E-N-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-E-N-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ═ E: S at (468, 415) ═ -->
+            <g id="tl-E-S" transform="translate(515,320) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tl-E-S-r" class="tl-red"    cx="7" cy="10" r="5"/>
+                <circle id="tl-E-S-a" class="tl-amber"  cx="7" cy="23" r="5"/>
+                <circle id="tl-E-S-g" class="tl-green"  cx="7" cy="36" r="5"/>
+            </g>
+
+            <!--SEMÁFOROS DE PEATONES-->
+
+            <!-- NORTE: extremo O (x=230) y extremo E (x=450), encima del paso -->
+            <g id="tlp-N-O" transform="translate(213,10) rotate(180,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-N-O-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-N-O-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-N-O-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+            <g id="tlp-N-E" transform="translate(453,80)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-N-E-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-N-E-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-N-E-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- SUR: extremo O (x=230) y extremo E (x=450), debajo del paso -->
+            <g id="tlp-S-O" transform="translate(213,540) rotate(180,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-S-O-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-S-O-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-S-O-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+            <g id="tlp-S-E" transform="translate(453,608)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-S-E-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-S-E-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-S-E-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- OESTE: extremo N (y=230) y extremo S (y=450), a la izq del paso -->
+            <!-- rotados 90° igual que los semáforos de vehículos del lado O -->
+            <g id="tlp-O-N" transform="translate(20,438) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-O-N-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-O-N-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-O-N-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+            <g id="tlp-O-S" transform="translate(100,197) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-O-S-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-O-S-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-O-S-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- ESTE: extremo N (y=230) y extremo S (y=450), a la dcha del paso -->
+            <!-- rotados -90° igual que los semáforos de vehículos del lado E -->
+            <g id="tlp-E-N" transform="translate(560,438) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-E-N-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-E-N-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-E-N-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+            <g id="tlp-E-S" transform="translate(640,197) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="tlp-E-S-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="tlp-E-S-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="tlp-E-S-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- COMPASS -->
+            <text class="compass" x="340" y="-20"  text-anchor="middle">N</text>
+            <text class="compass" x="340" y="700"  text-anchor="middle">S</text>
+            <text class="compass" x="-20"  y="344" text-anchor="middle">O</text>
+            <text class="compass" x="900" y="344"  text-anchor="middle">E</text>
+
+            <!-- ── ARROWS ON TRAFFIC LIGHTS de giros a la dcha ── -->
+
+            <!-- flecha IZQ encima de tl-N-O (translate 198,148) -->
+            <g transform="translate(203,138) rotate(90)" class="tl-arrow">
+                <polygon points="0,10 4,3 2,3 2,-6 -2,-6 -2,3 -4,3"/>
+            </g>
+
+            <!-- flecha ABAJO a la izquierda de tl-O-S (translate 148,183 rotate90) -->
+            <g transform="translate(122,478)" class="tl-arrow">
+                <polygon points="0,10 4,3 2,3 2,-6 -2,-6 -2,3 -4,3"/>
+            </g>
+
+            <!-- flecha DER debajo de tl-S-E (translate 467,480) -->
+            <g transform="translate(477,535) rotate(-90)" class="tl-arrow">
+                <polygon points="0,10 4,3 2,3 2,-6 -2,-6 -2,3 -4,3"/>
+            </g>
+
+            <!-- flecha ARRIBA a la derecha de tl-E-N (translate 515,313 rotate-90) -->
+            <g transform="translate(555,203) rotate(180)" class="tl-arrow">
+                <polygon points="0,10 4,3 2,3 2,-6 -2,-6 -2,3 -4,3"/>
+            </g>
+
+
+            <!-- ══════════════════════════════════════════
+                 RAILWAY CROSSING — CARRETERA ESTE
+                 Vías N-S en x=764 (rail W) y x=780 (rail E)
+                 Ballast x=758..786, de y=-40 a y=720
+                 Traviesas cada 22px
+                 Paso a nivel entre y=230 e y=450 (carretera H)
+ 
+                 Señalización:
+                  · Señal de San Andrés N: pivot x=752, y=228 → poste hasta y=160
+                  · Semáforo ferroviario N: x=738, y=108
+                  · Señal de San Andrés S: pivot x=792, y=452 → poste hasta y=520
+                  · Semáforo ferroviario S: x=792, y=555
+                  · Triángulo advertencia N: x=740, y=88
+            ══════════════════════════════════════════ -->
+            <!-- BALLAST (grava) -->
+            <rect class="rail-ballast" x="755" y="-40" width="36" height="760"/>
+
+            <!-- SLEEPERS (traviesas) — de y=-40 a y=720 cada 22px -->
+            <g class="rail-sleepers">
+                <rect x="751" y="-34" width="44" height="8" rx="2"/>
+                <rect x="751" y="-12" width="44" height="8" rx="2"/>
+                <rect x="751" y="10"  width="44" height="8" rx="2"/>
+                <rect x="751" y="32"  width="44" height="8" rx="2"/>
+                <rect x="751" y="54"  width="44" height="8" rx="2"/>
+                <rect x="751" y="76"  width="44" height="8" rx="2"/>
+                <rect x="751" y="98"  width="44" height="8" rx="2"/>
+                <rect x="751" y="120" width="44" height="8" rx="2"/>
+                <rect x="751" y="142" width="44" height="8" rx="2"/>
+                <rect x="751" y="164" width="44" height="8" rx="2"/>
+                <rect x="751" y="186" width="44" height="8" rx="2"/>
+                <rect x="751" y="208" width="44" height="8" rx="2"/>
+                <!-- dentro de la calzada -->
+                <rect x="751" y="230" width="44" height="8" rx="2"/>
+                <rect x="751" y="252" width="44" height="8" rx="2"/>
+                <rect x="751" y="274" width="44" height="8" rx="2"/>
+                <rect x="751" y="296" width="44" height="8" rx="2"/>
+                <rect x="751" y="318" width="44" height="8" rx="2"/>
+                <rect x="751" y="340" width="44" height="8" rx="2"/>
+                <rect x="751" y="362" width="44" height="8" rx="2"/>
+                <rect x="751" y="384" width="44" height="8" rx="2"/>
+                <rect x="751" y="406" width="44" height="8" rx="2"/>
+                <rect x="751" y="428" width="44" height="8" rx="2"/>
+                <!-- sur de calzada -->
+                <rect x="751" y="450" width="44" height="8" rx="2"/>
+                <rect x="751" y="472" width="44" height="8" rx="2"/>
+                <rect x="751" y="494" width="44" height="8" rx="2"/>
+                <rect x="751" y="516" width="44" height="8" rx="2"/>
+                <rect x="751" y="538" width="44" height="8" rx="2"/>
+                <rect x="751" y="560" width="44" height="8" rx="2"/>
+                <rect x="751" y="582" width="44" height="8" rx="2"/>
+                <rect x="751" y="604" width="44" height="8" rx="2"/>
+                <rect x="751" y="626" width="44" height="8" rx="2"/>
+                <rect x="751" y="648" width="44" height="8" rx="2"/>
+                <rect x="751" y="670" width="44" height="8" rx="2"/>
+                <rect x="751" y="692" width="44" height="8" rx="2"/>
+            </g>
+ 
+            <!-- RAÍLES -->
+            <line class="rail-track" x1="764" y1="-40" x2="764" y2="720"/>
+            <line class="rail-track" x1="780" y1="-40" x2="780" y2="720"/>
+   
+            <!-- ── PASO A NIVEL NORTE (lado N de la calzada) ── -->
+            <!-- Poste N: en x=752, de y=160 a y=228 -->
+            <line class="signal-post" x1="792" y1="230" x2="792" y2="340"/>
+
+            <!-- Semáforo ferroviario N -->
+            <g id="rail-tl-N" transform="translate(715,445) rotate(90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="rail-tl-N-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="rail-tl-N-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="rail-tl-N-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- Barrera N: pivota en (752,228), brazo hacia la izquierda -->
+            <g id="barrier-N">
+                <line class="barrier-arm" x1="792" y1="228" x2="882" y2="228"/>
+                <rect class="barrier-stripe" x="793" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="805" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="817" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="829" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="841" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="853" y="224" width="10" height="7"/>
+                <rect class="barrier-stripe" x="865" y="224" width="10" height="7"/>
+            </g>
+            
+ 
+            <!-- ── PASO A NIVEL SUR (lado S de la calzada) ── -->
+            <!-- Poste S: en x=792, de y=452 a y=520 -->
+            <line class="signal-post" x1="752" y1="340" x2="752" y2="450"/>
+            
+            <!-- Semáforo ferroviario S -->
+            <g id="rail-tl-S" transform="translate(815,187) rotate(-90,7,23)">
+                <rect class="tl-housing" x="0" y="0" width="14" height="46" rx="3"/>
+                <circle id="rail-tl-S-r" class="tl-red" cx="7" cy="10" r="5"/>
+                <circle id="rail-tl-S-a" class="tl-amber" cx="7" cy="23" r="5"/>
+                <circle id="rail-tl-S-g" class="tl-green" cx="7" cy="36" r="5"/>
+            </g>
+
+            <!-- Barrera S: pivota en (792,452), brazo hacia la derecha -->
+            <g id="barrier-S">
+                <line class="barrier-arm" x1="752" y1="452" x2="662" y2="452"/>
+                <rect class="barrier-stripe" x="703" y="448" width="10" height="7"/>
+                <rect x="667" y="448" width="10" height="7" class="barrier-stripe"/>
+                <rect x="679" y="448" width="10" height="7" class="barrier-stripe"/>
+                <rect x="691" y="448" width="10" height="7" class="barrier-stripe"/>
+                <rect x="703" y="448" width="10" height="7" class="barrier-stripe"/>                
+                <rect x="715" y="448" width="10" height="7" class="barrier-stripe"/>
+                <rect x="727" y="448" width="10" height="7" class="barrier-stripe"/>
+                <rect x="739" y="448" width="10" height="7" class="barrier-stripe"/>
+            </g>
+        </svg>
+    </div>
+</main>
+
+<script src="js/main.js"></script>
+<script src="js/main2.js"></script>
+<script src="js/main3.js"></script>
+</body>
+</html>
