@@ -21,7 +21,6 @@ const sliderToRoute = {
     'slider-E-S': { from: 'E', to: 'S', lane: 'inner', tlId: 'tl-E-S' },
     'slider-E-N': { from: 'E', to: 'N', lane: 'inner', tlId: 'tl-E-N' }
 };
-//cgd: no sé si lane hace falta?
 
 // Volumen tráfico inicial es 0
 let trafficVolumes = {
