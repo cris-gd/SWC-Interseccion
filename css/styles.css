@@ -429,3 +429,76 @@ main {
     opacity: 0.9;
 }
 
+/* ═══════════════════════════════════════
+   PEATONES
+═══════════════════════════════════════ */
+
+@keyframes ped-N-mover {
+    from { transform: translate(220px,  65px); }
+    to   { transform: translate(450px,  65px); }
+}
+@keyframes ped-S-mover {
+    from { transform: translate(460px, 595px); }
+    to   { transform: translate(230px, 595px); }
+}
+@keyframes ped-O-mover {
+    from { transform: translate( 65px, 220px); }
+    to   { transform: translate( 65px, 450px); }
+}
+@keyframes ped-E-mover {
+    from { transform: translate(600px, 460px); }
+    to   { transform: translate(600px, 230px); }
+}
+
+@keyframes ped-torso-rebote {
+    0%, 100% { transform: translateY(0);    }
+    50%      { transform: translateY(-2px); }
+}
+@keyframes ped-brazo-fwd {
+    0%, 100% { transform: rotate(  0deg); }
+    50%      { transform: rotate( 25deg); }
+}
+@keyframes ped-brazo-bck {
+    0%, 100% { transform: rotate(  0deg); }
+    50%      { transform: rotate(-25deg); }
+}
+@keyframes ped-pierna-fwd {
+    0%, 100% { transform: rotate(  0deg); }
+    50%      { transform: rotate( 20deg); }
+}
+@keyframes ped-pierna-bck {
+    0%, 100% { transform: rotate(  0deg); }
+    50%      { transform: rotate(-20deg); }
+}
+
+.peaton { visibility: hidden; }
+.peaton.animando { visibility: visible; }
+
+#peaton-N { animation: ped-N-mover 3s linear 1 forwards; }
+#peaton-S { animation: ped-S-mover 3s linear 1 forwards; }
+#peaton-O { animation: ped-O-mover 3s linear 1 forwards; }
+#peaton-E { animation: ped-E-mover 3s linear 1 forwards; }
+
+.peaton rect {
+    animation: ped-torso-rebote 0.45s ease-in-out 7 forwards;
+}
+.peaton line:nth-child(3) {
+    transform-origin: -5px -8px;
+    animation: ped-brazo-fwd  0.45s ease-in-out 7 forwards;
+}
+.peaton line:nth-child(4) {
+    transform-origin:  5px -8px;
+    animation: ped-brazo-bck  0.45s ease-in-out 7 forwards;
+}
+.peaton line:nth-child(5) {
+    transform-origin: -3px  4px;
+    animation: ped-pierna-fwd 0.45s ease-in-out 7 forwards;
+}
+.peaton line:nth-child(6) {
+    transform-origin:  3px  4px;
+    animation: ped-pierna-bck 0.45s ease-in-out 7 forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .peaton, .peaton * { animation: none; visibility: hidden; }
+}
