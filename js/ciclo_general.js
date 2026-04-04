@@ -26,7 +26,7 @@ const colores_ES = semaforo_ES.getElementsByTagName("circle");
 const semaforo_EN = document.getElementById("tl-E-N");
 const colores_EN = semaforo_EN.getElementsByTagName("circle");
 
-const semaforos_interseccion = document.querySelectorAll("circle[id^=tl-]");
+const semaforos_interseccion = document.querySelectorAll("circle[id^='tl-']");
 //console.log(semaforos_interseccion);
 function apagarTodas() {
     for (let i = 0; i < semaforos_interseccion.length; i++) {
@@ -42,10 +42,6 @@ function todoAlRojo() {
         const rojo  = semaforos_interseccion[i];
         const ambar = semaforos_interseccion[i+1];
         const verde = semaforos_interseccion[i+2];
-
-        if (rojo.classList.contains("bloqueado")  ||
-            ambar.classList.contains("bloqueado") ||
-            verde.classList.contains("bloqueado")) continue;
 
         ambar.classList.remove("on");
         verde.classList.remove("on");

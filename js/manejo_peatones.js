@@ -21,6 +21,14 @@ const bloqueando = { N: false, S: false, E: false, O: false };
 const semPeatonPorDir = { N: semaforos_N_p, S: semaforos_S_p, E: semaforos_E_p, O: semaforos_O_p };
 const semVehicPorDir  = { N: direc_N, S: direc_S, E: direc_E, O: direc_O };
 
+// Referencias a los elementos de peatones animados
+const peatones = {
+    N: document.getElementById("peaton-N"),
+    S: document.getElementById("peaton-S"),
+    E: document.getElementById("peaton-E"),
+    O: document.getElementById("peaton-O")
+};
+
 function aplicarEstadoPeaton(semList, indiceActivo) {
     for (let i = 0; i < semList.length; i += 3) {
         semList[i].classList.remove("on");
@@ -30,6 +38,32 @@ function aplicarEstadoPeaton(semList, indiceActivo) {
     }
 }
 
+function reiniciarAnimacionPeaton(dir) {
+    const peaton = peatones[dir];
+    if (!peaton) return;
+    
+    // Quitar clase animando si existe
+    peaton.classList.remove('animando');
+    
+    // Forzar reflow
+    void peaton.offsetWidth;
+    
+    // Clonar y reemplazar para reiniciar la animación
+    const nuevoPeaton = peaton.cloneNode(true);
+    peaton.parentNode.replaceChild(nuevoPeaton, peaton);
+    peatones[dir] = nuevoPeaton;
+    
+    // Añadir clase animando para mostrar y animar
+    nuevoPeaton.classList.add('animando');
+    
+    // Hacer que el peatón desaparezca después de que termine la animación (3 segundos)
+    setTimeout(() => {
+        if (peatones[dir]) {
+            peatones[dir].classList.remove('animando');
+        }
+    }, 3000);
+}
+
 function bloquearVehiculos(semV) {
     for (let i = 0; i < semV.length; i += 3) {
         const rojo  = semV[i];
@@ -37,20 +71,16 @@ function bloquearVehiculos(semV) {
         const verde = semV[i+2];
 
         if (verde.classList.contains("on")) {
-            // Estaba en verde: imitar ciclo (verde→ambar→rojo)
             verde.classList.remove("on");
             ambar.classList.add("on");
-            rojo.classList.add("bloqueado");   // ← el ciclo no tocará este semáforo
+            rojo.classList.add("bloqueado");
             setTimeout(() => {
                 ambar.classList.remove("on");
                 rojo.classList.add("on");
             }, 5000);
         } else if (ambar.classList.contains("on")) {
-            // Estaba en ámbar: dejar que termine y luego bloquear en rojo
             rojo.classList.add("bloqueado");
-            // El ciclo normal lo pondrá en rojo; el bloqueo lo mantiene ahí
         } else {
-            // Ya estaba en rojo: simplemente bloquear
             rojo.classList.add("bloqueado");
         }
     }
@@ -59,7 +89,6 @@ function bloquearVehiculos(semV) {
 function desbloquearVehiculos(semV) {
     for (let i = 0; i < semV.length; i += 3) {
         semV[i].classList.remove("bloqueado");
-        // No tocamos .on — el ciclo lo retomará en su próxima llamada
     }
 }
 
@@ -70,21 +99,29 @@ function activarPeaton(dir) {
     const semP = semPeatonPorDir[dir];
     const semV = semVehicPorDir[dir];
 
-    // Peaton: verde → ámbar inmediatamente
+    // Paso 1: Peatón: verde → ámbar inmediatamente
     aplicarEstadoPeaton(semP, 1);
     bloquearVehiculos(semV);
 
     setTimeout(() => {
-        // 5s después: peatón → rojo
+        // Paso 2: 5s después: peatón → rojo (empieza el cruce)
         aplicarEstadoPeaton(semP, 0);
-
+        
+        // INICIAR ANIMACIÓN DEL PEATÓN (dura 3 segundos)
+        reiniciarAnimacionPeaton(dir);
+        
+        // Paso 3: Esperar 10 segundos TOTALES en rojo
+        // (3 segundos de animación + 7 segundos adicionales de seguridad)
         setTimeout(() => {
-            // 10s en rojo: peatón → verde y desbloquear
+            // Paso 4: Después de 10s en rojo: peatón → verde
             aplicarEstadoPeaton(semP, 2);
+            
+            // Paso 5: Desbloquear vehículos (vuelven a su ciclo normal)
             desbloquearVehiculos(semV);
             bloqueando[dir] = false;
-        }, 10000);
-    }, 5000);
+        }, 10000); // 10 segundos totales en rojo
+        
+    }, 5000); // Tiempo que el semáforo peatonal está en ámbar
 }
 
 document.getElementById("boton-peatones-N").addEventListener("click", () => activarPeaton("N"));

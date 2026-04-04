@@ -562,12 +562,62 @@
                 <rect x="727" y="448" width="10" height="7" class="barrier-stripe"/>
                 <rect x="739" y="448" width="10" height="7" class="barrier-stripe"/>
             </g>
+
+            <!-- ══════════════════════════════════════════════════════════
+                FIGURAS DE PEATÓN — visibility:hidden hasta la animación
+                Cada figura tiene 4 partes: cabeza, torso, brazos, piernas
+                IDs: peaton-N, peaton-S, peaton-E, peaton-O
+                Posición de origen (en espera, junto al paso):
+                N → borde oeste del paso norte  (x=220, y=65)
+                S → borde este del paso sur     (x=460, y=595)
+                O → borde norte del paso oeste  (x=65,  y=220)
+                E → borde sur del paso este     (x=600, y=460)
+            ══════════════════════════════════════════════════════════ -->
+
+            <!-- PEATÓN NORTE -->
+            <g id="peaton-N" class="peaton" transform="translate(220,65)">
+            <circle cx="0" cy="-20" r="7" fill="#ffd6a5" stroke="#c8a07a" stroke-width="0.8"/>
+            <rect x="-5" y="-12" width="10" height="16" rx="3" fill="#1a73e8" stroke="#0d47a1" stroke-width="1"/>
+            <line x1="-5" y1="-8" x2="-11" y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="5"  y1="-8" x2="11"  y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="-3" y1="4"  x2="-6"  y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="3"  y1="4"  x2="6"   y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            </g>
+    
+            <!-- PEATÓN SUR -->
+            <g id="peaton-S" class="peaton" transform="translate(460,595)">
+            <circle cx="0" cy="-20" r="7" fill="#ffd6a5" stroke="#c8a07a" stroke-width="0.8"/>
+            <rect x="-5" y="-12" width="10" height="16" rx="3" fill="#1a73e8" stroke="#0d47a1" stroke-width="1"/>
+            <line x1="-5" y1="-8" x2="-11" y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="5"  y1="-8" x2="11"  y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="-3" y1="4"  x2="-6"  y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="3"  y1="4"  x2="6"   y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            </g>
+    
+            <!-- PEATÓN OESTE -->
+            <g id="peaton-O" class="peaton" transform="translate(65,220)">
+            <circle cx="0" cy="-20" r="7" fill="#ffd6a5" stroke="#c8a07a" stroke-width="0.8"/>
+            <rect x="-5" y="-12" width="10" height="16" rx="3" fill="#1a73e8" stroke="#0d47a1" stroke-width="1"/>
+            <line x1="-5" y1="-8" x2="-11" y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="5"  y1="-8" x2="11"  y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="-3" y1="4"  x2="-6"  y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="3"  y1="4"  x2="6"   y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            </g>
+    
+            <!-- PEATÓN ESTE -->
+            <g id="peaton-E" class="peaton" transform="translate(600,460)">
+            <circle cx="0" cy="-20" r="7" fill="#ffd6a5" stroke="#c8a07a" stroke-width="0.8"/>            <rect x="-5" y="-12" width="10" height="16" rx="3" fill="#1a73e8" stroke="#0d47a1" stroke-width="1"/>
+            <line x1="-5" y1="-8" x2="-11" y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="5"  y1="-8" x2="11"  y2="0"  stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="-3" y1="4"  x2="-6"  y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            <line x1="3"  y1="4"  x2="6"   y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+            </g>
         </svg>
     </div>
 </main>
 
-<script src="js/main.js"></script>
-<script src="js/main2.js"></script>
-<script src="js/main3.js"></script>
+<script src="js/ciclo_general.js"></script>
+<script src="js/manejo_peatones.js"></script>
+<script src="js/manejo_coches.js"></script>
 </body>
 </html>
