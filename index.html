@@ -18,9 +18,7 @@
 </header>
 
 <main>
-    <aside class="control-panel">
-        <div class="panel-title">Panel de Control</div>
-       
+    <aside class="control-panel">       
         <!-- ── Volumen de tráfico ── -->
         <div class="vol-block">
           <div class="vol-block-title">Volumen de tráfico</div>
@@ -66,6 +64,15 @@
                 <button id = "boton-peatones-S" class="boton-peatones">S</button>
                 <button id = "boton-peatones-E" class="boton-peatones">E</button>
                 <button id = "boton-peatones-O" class="boton-peatones">O</button>
+            </div>
+        </div>
+
+        <!-- ── Tren ── -->
+        <div class="vol-block">
+            <div class="vol-block-title">Tren</div>
+            <div class="tren-container vol-group">
+                <div class="vol-group-header">Frecuencia (seg):</div>
+                <input type="number" id="intervalo-tren" min="15" max="60" value="30" step="1">
             </div>
         </div>
     </aside>
@@ -612,6 +619,43 @@
             <line x1="-3" y1="4"  x2="-6"  y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
             <line x1="3"  y1="4"  x2="6"   y2="14" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
             </g>
+
+            <!-- ══ TREN ══ -->
+            <defs>
+                <clipPath id="clipTren">
+                    <rect x="755" y="-40" width="36" height="760"/>
+                </clipPath>
+            </defs>
+            
+            <g id="train-container" clip-path="url(#clipTren)">
+                <g id="train">
+                    <!-- LOCOMOTORA -->
+                    <rect x="758" y="0" width="28" height="90" rx="4" fill="#b71c1c" stroke="#7f0000" stroke-width="1.5"/>
+                    <rect x="758" y="0" width="28" height="12" rx="4" fill="#f9a825"/>
+                    <rect x="762" y="18" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.85"/>
+                    <rect x="762" y="40" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.85"/>
+                    <rect x="762" y="62" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.85"/>
+                    <circle cx="772" cy="6" r="3" fill="#fff9c4"/>
+
+                    <!-- ENGANCHE 1 -->
+                    <rect x="768" y="90" width="8" height="6" rx="1" fill="#555"/>
+
+                    <!-- VAGÓN 1 -->
+                    <rect x="758" y="96" width="28" height="85" rx="4" fill="#b71c1c" stroke="#7f0000" stroke-width="1.5"/>
+                    <rect x="762" y="106" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+                    <rect x="762" y="128" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+                    <rect x="762" y="150" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+
+                    <!-- ENGANCHE 2 -->
+                    <rect x="768" y="181" width="8" height="6" rx="1" fill="#555"/>
+
+                    <!-- VAGÓN 2 -->
+                    <rect x="758" y="187" width="28" height="85" rx="4" fill="#b71c1c" stroke="#7f0000" stroke-width="1.5"/>
+                    <rect x="762" y="197" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+                    <rect x="762" y="219" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+                    <rect x="762" y="241" width="20" height="12" rx="2" fill="#e3f2fd" opacity="0.75"/>
+                </g>
+            </g>            
         </svg>
     </div>
 </main>
@@ -619,5 +663,6 @@
 <script src="js/ciclo_general.js"></script>
 <script src="js/manejo_peatones.js"></script>
 <script src="js/manejo_coches.js"></script>
+<script src="js/manejo_tren.js"></script>
 </body>
 </html>

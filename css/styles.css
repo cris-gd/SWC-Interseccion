@@ -156,7 +156,6 @@ main {
     text-transform: uppercase;
     color: var(--text-dim);
     border-bottom: 1px solid var(--border-soft);
-    padding-bottom: 3px;
 }
  
 .vol-group {
@@ -255,7 +254,7 @@ main {
     gap: 2px;
     justify-items: center;
     align-items: center;
-    padding: 2px 0;
+
 }
 
 /* Estilos individuales en cruz */
@@ -501,4 +500,83 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
     .peaton, .peaton * { animation: none; visibility: hidden; }
+}
+
+
+
+
+
+
+
+
+
+
+#train {
+    visibility: hidden;
+}
+
+#train.animar {
+    visibility: visible;
+    animation: pasarTren 8s linear forwards;
+}
+
+@keyframes pasarTren {
+    0% {
+        transform: translateY(1000px);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-400px);
+        opacity: 0;
+    }
+}
+
+@keyframes bajarBarreraN {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(90deg); }
+}
+
+@keyframes subirBarreraN {
+    0% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+@keyframes bajarBarreraS {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(90deg); }
+}
+
+@keyframes subirBarreraS {
+    0% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.barrera-norte {
+    transform-origin: 792px 228px;
+}
+
+.barrera-sur {
+    transform-origin: 752px 452px;
+}
+
+.barrera-norte.bajando {
+    animation: bajarBarreraN 2s ease-in-out forwards;
+}
+
+.barrera-norte.subiendo {
+    animation: subirBarreraN 2s ease-in-out forwards;
+}
+
+.barrera-sur.bajando {
+    animation: bajarBarreraS 2s ease-in-out forwards;
+}
+
+.barrera-sur.subiendo {
+    animation: subirBarreraS 2s ease-in-out forwards;
 }
