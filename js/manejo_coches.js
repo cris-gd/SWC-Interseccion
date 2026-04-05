@@ -428,7 +428,8 @@ function createCar(from, to, tlId) {
         active: true,
         isStopped: false,
         targetDirection: to,  // dirección final tras el giro (N/S/E/O)
-        hasTurned: false
+        hasTurned: false,
+        wasStoppedByExtraLight: false
     };
 
     activeCars.push(car);
@@ -439,51 +440,251 @@ function createCar(from, to, tlId) {
 // ACTUALIZACIÓN DE POSICIONES (ANIMACIÓN)
 // =====================================================
 
-// Líneas de stop (coordenada SVG donde debe quedar el FRENTE del vehículo)
+// Líneas de stop principales (coordenada SVG donde debe quedar el FRENTE del vehículo)
 //   S: frente = car.y + len  →  detener cuando frente >= 230  →  car.y = 230 - len
 //   N: frente = car.y - len  →  detener cuando frente <= 450  →  car.y = 450 + len
 //   E: frente = car.x + len  →  detener cuando frente >= 230  →  car.x = 230 - len
 //   O: frente = car.x - len  →  detener cuando frente <= 450  →  car.x = 450 + len
 const STOP_LINES = { 'S': 230, 'N': 450, 'E': 230, 'O': 450 };
 
-function shouldStopAtTrafficLight(car) {
-    const isGreen = getTrafficLightState(car.tlId);
-    if (isGreen) {
-        car.isStopped = false;
-        return false;
+// ─── Geometría exacta de zonas prohibidas de parada ──────────────────────────
+//
+// Un vehículo NUNCA puede quedar parado (ni siquiera en cola) con ninguna parte
+// de su cuerpo dentro de estas bandas:
+//
+//   CEBRA NORTE  (vehículos dir S): banda y ∈ [50, 80]
+//   CEBRA SUR    (vehículos dir N): banda y ∈ [580, 610]
+//   CEBRA OESTE  (vehículos dir E): banda x ∈ [50, 80]
+//   CEBRA ESTE   (vehículos dir O): banda x ∈ [590, 620]
+//   VÍAS TREN    (vehículos dir O o E, carretera horizontal): banda x ∈ [751, 790]
+//
+// Líneas de stop de semáforos peatonales (frente del vehículo):
+//   Dir S → frente se detiene en y = 48  (2 px antes del cebra N en y=50)
+//   Dir N → frente se detiene en y = 612 (2 px después del cebra S en y=610, dir N avanza a y decreciente)
+//   Dir E → frente se detiene en x = 48
+//   Dir O → frente se detiene en x = 622
+//
+// Líneas de stop semáforo ferroviario (frente del vehículo):
+//   Dir O → frente se detiene en x = 749  (2 px antes de x=751)
+//   Dir E → frente se detiene en x = 792  (2 px después de x=790)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Bandas prohibidas indexadas por dirección de marcha.
+// Cada entrada: { coord: 'x'|'y', min, max }
+// "min" y "max" son coordenadas SVG del CUERPO (trasera..frente) del vehículo.
+const FORBIDDEN_ZONES = {
+    'S': [{ coord: 'y', min: 50,  max: 80  }],
+    'N': [{ coord: 'y', min: 580, max: 610 }],
+    'E': [{ coord: 'x', min: 50,  max: 80  },
+          { coord: 'x', min: 751, max: 790 }],
+    'O': [{ coord: 'x', min: 590, max: 620 },
+          { coord: 'x', min: 751, max: 790 }]
+};
+
+// Devuelve true si el vehículo (en su posición actual) solapa con alguna zona prohibida.
+function isInForbiddenZone(car) {
+    const zones = FORBIDDEN_ZONES[car.direction];
+    if (!zones) return false;
+    const len = getVehicleLength(car.type);
+
+    for (const z of zones) {
+        let bodyMin, bodyMax;
+        if (z.coord === 'y') {
+            // Dir S: trasera = car.y, frente = car.y + len
+            // Dir N: frente = car.y - len, trasera = car.y  → bodyMin = car.y-len, bodyMax = car.y
+            bodyMin = (car.direction === 'S') ? car.y       : car.y - len;
+            bodyMax = (car.direction === 'S') ? car.y + len : car.y;
+        } else {
+            // Dir E: trasera = car.x, frente = car.x + len
+            // Dir O: frente = car.x - len, trasera = car.x
+            bodyMin = (car.direction === 'E') ? car.x       : car.x - len;
+            bodyMax = (car.direction === 'E') ? car.x + len : car.x;
+        }
+        // Solapamiento: los rangos se cruzan
+        if (bodyMax > z.min && bodyMin < z.max) return true;
+    }
+    return false;
+}
+
+// Devuelve la lista de semáforos adicionales (peatonales + ferroviarios) que
+// debe respetar un coche dado, con su línea de stop (coordenada SVG del FRENTE).
+// Solo se añaden los checks relevantes para la posición actual del vehículo.
+function getExtraStopChecks(car) {
+    const checks = [];
+    const front = getFrontCoord(car);
+
+    switch (car.direction) {
+
+        case 'S':
+            // Cebra Norte: y=50..80. El frente (car.y+len) debe detenerse en y=48.
+            // Solo antes de haberlo superado (front < 82).
+            if (!car.hasTurned && front < 82) {
+                checks.push({ tlId: 'tlp-N-O', stopLine: 48 });
+                checks.push({ tlId: 'tlp-N-E', stopLine: 48 });
+            }
+            break;
+
+        case 'N':
+            // Cebra Sur: y=580..610. Dir N avanza a y decreciente; frente = car.y-len.
+            // "Antes del paso" = frente > 612. Superado = frente < 578.
+            if (!car.hasTurned && front > 578) {
+                checks.push({ tlId: 'tlp-S-O', stopLine: 612 });
+                checks.push({ tlId: 'tlp-S-E', stopLine: 612 });
+            }
+            break;
+
+        case 'E':
+            // Cebra Oeste: x=50..80. Frente = car.x+len debe detenerse en x=48.
+            if (!car.hasTurned && front < 82) {
+                checks.push({ tlId: 'tlp-O-N', stopLine: 48 });
+                checks.push({ tlId: 'tlp-O-S', stopLine: 48 });
+            }
+            // Vías tren: x=751..790. Frente debe detenerse en x=792 (viniendo del O,
+            // dir E avanza a x creciente, detener ANTES de x=751: frente en x=749).
+            // Dir E viene del Oeste; las vías están a la derecha de la intersección.
+            // El coche habrá girado antes si su destino no es E recto, pero para
+            // los que sigan recto (O-E o los que giraron y ahora van E), aplica.
+            if (front > 680 && front < 793) {
+                checks.push({ tlId: 'rail-tl-N', stopLine: 749 });
+            }
+            break;
+
+        case 'O':
+            // Cebra Este: x=590..620. Dir O avanza a x decreciente; frente = car.x-len.
+            // "Antes del paso" = frente > 622. Superado = frente > 588.
+            if (!car.hasTurned && front > 588) {
+                checks.push({ tlId: 'tlp-E-N', stopLine: 622 });
+                checks.push({ tlId: 'tlp-E-S', stopLine: 622 });
+            }
+            // Vías tren: x=751..790. Dir O avanza a x decreciente; frente = car.x-len.
+            // Detener antes de x=790: frente en x=792 (el frente aún no llegó a 790).
+            // Rango activo: frente entre 792 y 680 (antes de cruzar, no después).
+            if (front < 793 && front > 680) {
+                checks.push({ tlId: 'rail-tl-S', stopLine: 800 });
+            }
+            break;
     }
 
-    const stopLine = STOP_LINES[car.direction];
-    if (stopLine === undefined) return false;
+    return checks;
+}
+
+// Evalúa un semáforo extra con su línea de stop.
+// Misma lógica que shouldStopAtTrafficLight pero parametrizada.
+// Devuelve true si el vehículo debe detenerse ante este semáforo.
+function checkExtraLight(car, tlId, stopLine) {
+    const isGreen = getTrafficLightState(tlId);
+    if (isGreen) return false;
 
     const front = getFrontCoord(car);
     const len   = getVehicleLength(car.type);
+    const dir   = car.direction;
 
-    // Punto de no retorno: el frente cruzó la línea más de 10 px → dejar pasar
-    switch (car.direction) {
+    // Punto de no retorno: ya cruzó la línea → dejar pasar
+    switch (dir) {
         case 'S': if (front > stopLine + 10) return false; break;
         case 'N': if (front < stopLine - 10) return false; break;
         case 'E': if (front > stopLine + 10) return false; break;
         case 'O': if (front < stopLine - 10) return false; break;
     }
 
-    // El frente todavía no llegó a la línea → seguir avanzando
-    switch (car.direction) {
+    // El frente no ha llegado a la línea → no hace falta parar aún
+    switch (dir) {
         case 'S': if (front < stopLine) return false; break;
         case 'N': if (front > stopLine) return false; break;
         case 'E': if (front < stopLine) return false; break;
         case 'O': if (front > stopLine) return false; break;
     }
 
-    // Anclar exactamente en la línea de stop
-    switch (car.direction) {
-        case 'S': car.y = stopLine - len; break;   // frente queda en stopLine
-        case 'N': car.y = stopLine + len; break;   // frente (car.y-len) queda en stopLine
+    // Anclar el vehículo exactamente en la línea de stop
+    switch (dir) {
+        case 'S': car.y = stopLine - len; break;
+        case 'N': car.y = stopLine + len; break;
         case 'E': car.x = stopLine - len; break;
-        case 'O': car.x = stopLine + len; break;   // frente (car.x-len) queda en stopLine
+        case 'O': car.x = stopLine + len; break;
     }
     car.isStopped = true;
+    car.wasStoppedByExtraLight = true;
     return true;
+}
+
+function shouldStopAtTrafficLight(car) {
+    if (car.wasStoppedByExtraLight) {
+    const extraChecks = getExtraStopChecks(car);
+
+    // Si YA no está bloqueado por ningún semáforo secundario → avanzar
+    const stillBlocked = extraChecks.some(({ tlId, stopLine }) =>
+        checkExtraLight(car, tlId, stopLine)
+    );
+
+    if (!stillBlocked) {
+        car.wasStoppedByExtraLight = false;
+        car.isStopped = false;
+        return false; // 👈 IGNORA semáforo principal temporalmente
+    }
+
+    return true; // sigue parado por el secundario
+}
+    // ── 1. Semáforo principal de la ruta ────────────────────────────────────
+    const isGreen = getTrafficLightState(car.tlId);
+    if (isGreen) {
+        car.isStopped = false;
+        // Aun con semáforo principal en verde, verificar semáforos extra
+    } else {
+        const stopLine = STOP_LINES[car.direction];
+        if (stopLine !== undefined) {
+            const front = getFrontCoord(car);
+            const len   = getVehicleLength(car.type);
+
+            // Punto de no retorno
+            let pastLine = false;
+            switch (car.direction) {
+                case 'S': pastLine = front > stopLine + 10; break;
+                case 'N': pastLine = front < stopLine - 10; break;
+                case 'E': pastLine = front > stopLine + 10; break;
+                case 'O': pastLine = front < stopLine - 10; break;
+            }
+
+            if (!pastLine) {
+                // No ha llegado aún
+                let beforeLine = false;
+                switch (car.direction) {
+                    case 'S': beforeLine = front < stopLine; break;
+                    case 'N': beforeLine = front > stopLine; break;
+                    case 'E': beforeLine = front < stopLine; break;
+                    case 'O': beforeLine = front > stopLine; break;
+                }
+                if (!beforeLine) {
+                    // Anclar en línea principal
+                    switch (car.direction) {
+                        case 'S': car.y = stopLine - len; break;
+                        case 'N': car.y = stopLine + len; break;
+                        case 'E': car.x = stopLine - len; break;
+                        case 'O': car.x = stopLine + len; break;
+                    }
+                    car.isStopped = true;
+                    return true;
+                } else {
+                    // Todavía lejos: seguir avanzando
+                }
+            }
+            // si pastLine → dejar pasar (ya cruzó)
+        }
+    }
+
+    // ── 2. Semáforos peatonales y ferroviarios ───────────────────────────────
+    const extraChecks = getExtraStopChecks(car);
+    for (const { tlId, stopLine } of extraChecks) {
+        if (checkExtraLight(car, tlId, stopLine)) {
+            return true;
+        }
+    }
+
+    // Ningún semáforo (ni principal ni extra) está bloqueando:
+    // limpiar isStopped para que el coche pueda arrancar
+    if (isGreen) car.isStopped = false;
+
+    return false;
 }
 
 function needsToTurn(car) {
@@ -631,7 +832,7 @@ function moveCar(car) {
     // ── 3. Lógica de movimiento ──────────────────────────────────────────────
     const canMove = !blockedByLight && !car.isStopped && !blockedByCar;
 
-    // Compactar cola
+    // Compactar cola: el coche está parado (semáforo rojo) pero hay hueco delante
     if (!canMove && car.isStopped && !blockedByCar) {
         const stopLine = STOP_LINES[car.direction];
         let minGap = Infinity;
@@ -643,20 +844,36 @@ function moveCar(car) {
 
         if (minGap > MIN_SAFE_DISTANCE + CAR_SPEED) {
             const vehicleLen = getVehicleLength(car.type);
-            let canAdvance = true;
+
+            // Calcular posición provisional tras avanzar un paso
+            let nextX = car.x, nextY = car.y;
             switch(car.direction) {
-                case 'S': if (car.y + CAR_SPEED + vehicleLen >= stopLine) canAdvance = false; break;
-                case 'N': if (car.y - CAR_SPEED - vehicleLen <= stopLine) canAdvance = false; break;
-                case 'E': if (car.x + CAR_SPEED + vehicleLen >= stopLine) canAdvance = false; break;
-                case 'O': if (car.x - CAR_SPEED - vehicleLen <= stopLine) canAdvance = false; break;
+                case 'S': nextY = car.y + CAR_SPEED; break;
+                case 'N': nextY = car.y - CAR_SPEED; break;
+                case 'E': nextX = car.x + CAR_SPEED; break;
+                case 'O': nextX = car.x - CAR_SPEED; break;
             }
-            if (canAdvance) {
-                switch(car.direction) {
-                    case 'S': car.y += CAR_SPEED; break;
-                    case 'N': car.y -= CAR_SPEED; break;
-                    case 'E': car.x += CAR_SPEED; break;
-                    case 'O': car.x -= CAR_SPEED; break;
-                }
+
+            // No sobrepasar la línea de stop principal
+            let beyondStop = false;
+            switch(car.direction) {
+                case 'S': beyondStop = (nextY + vehicleLen >= stopLine); break;
+                case 'N': beyondStop = (nextY - vehicleLen <= stopLine); break;
+                case 'E': beyondStop = (nextX + vehicleLen >= stopLine); break;
+                case 'O': beyondStop = (nextX - vehicleLen <= stopLine); break;
+            }
+
+            // Comprobar si la posición provisional entraría en una zona prohibida
+            const testCar = Object.assign({}, car, { x: nextX, y: nextY });
+            const wouldEnterForbidden = isInForbiddenZone(testCar);
+
+            // Si ya estamos en zona prohibida (raro pero posible en el primer frame),
+            // continuar avanzando para salir cuanto antes
+            const alreadyInForbidden = isInForbiddenZone(car);
+
+            if (!beyondStop && (!wouldEnterForbidden || alreadyInForbidden)) {
+                car.x = nextX;
+                car.y = nextY;
             }
         }
     }
