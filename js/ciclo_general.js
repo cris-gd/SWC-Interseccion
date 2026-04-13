@@ -28,10 +28,12 @@ const colores_EN = semaforo_EN.getElementsByTagName("circle");
 
 const semaforos_interseccion = document.querySelectorAll("circle[id^='tl-']");
 //console.log(semaforos_interseccion);
+let ciclo_semaforos = 0;
+
 function apagarTodas() {
     for (let i = 0; i < semaforos_interseccion.length; i++) {
         // Solo apagar si ninguna luz del trío está bloqueada
-        if (!semaforos_interseccion[i].classList.contains("bloqueado")) {
+        if (!semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")) {
             semaforos_interseccion[i].classList.remove("on");
         }
     }
@@ -52,7 +54,7 @@ function todoAlRojo() {
 function setLight(circles, index) {
     // Si cualquier luz del grupo está bloqueada, no tocar nada
     for (let i = 0; i < circles.length; i++) {
-        if (circles[i].classList.contains("bloqueado")) return;
+        if (circles[i].classList.contains("bloqueado") || circles[i].classList.contains("trainblock")) return;
     }
     for (let i = 0; i < circles.length; i++) {
         circles[i].classList.remove("on");
@@ -61,6 +63,7 @@ function setLight(circles, index) {
 }
 
 function t0_10(){
+    ciclo_semaforos=1;
     apagarTodas();//estado inicial
     todoAlRojo();
 
@@ -71,6 +74,7 @@ function t0_10(){
     setTimeout(t10_15, 10000);
 }
 function t10_15(){
+    ciclo_semaforos=2;
     setLight(colores_OE, 1);
     setLight(colores_OS, 1);
     setLight(colores_EO, 1);
@@ -78,12 +82,14 @@ function t10_15(){
     setTimeout(t15_17, 5000);
 }
 function t15_17(){
+    ciclo_semaforos=3;
     apagarTodas();
     todoAlRojo();
 
     setTimeout(t17_27, 2000);
 }
 function t17_27(){
+    ciclo_semaforos=4;
     setLight(colores_ON, 2);
     setLight(colores_NO, 2);
     setLight(colores_ES, 2);
@@ -91,6 +97,7 @@ function t17_27(){
     setTimeout(t27_32, 10000);
 }
 function t27_32(){
+    ciclo_semaforos=5;
     setLight(colores_ON, 1);
     setLight(colores_NO, 1);
     setLight(colores_ES, 1);
@@ -98,12 +105,14 @@ function t27_32(){
     setTimeout(t32_34, 5000);
 }
 function t32_34(){
+    ciclo_semaforos=6;
     apagarTodas();
     todoAlRojo();
 
     setTimeout(t34_44, 2000);
 }
 function t34_44(){
+    ciclo_semaforos=7;
     setLight(colores_NS, 2);
     setLight(colores_NO, 2);
     setLight(colores_SN, 2);
@@ -111,6 +120,7 @@ function t34_44(){
     setTimeout(t44_49, 10000);
 }
 function t44_49(){
+    ciclo_semaforos=8;
     setLight(colores_NS, 1);
     setLight(colores_NO, 1);
     setLight(colores_SN, 1);
@@ -118,12 +128,14 @@ function t44_49(){
     setTimeout(t49_51, 5000);
 }
 function t49_51(){
+    ciclo_semaforos=9;
     apagarTodas();
     todoAlRojo();
 
     setTimeout(t51_61, 2000);
 }
 function t51_61(){
+    ciclo_semaforos=10;
     setLight(colores_SO, 2);
     setLight(colores_NE, 2);
     setLight(colores_OS, 2);
@@ -131,6 +143,7 @@ function t51_61(){
     setTimeout(t61_66, 10000);
 }
 function t61_66(){
+    ciclo_semaforos=11;
     setLight(colores_SO, 1);
     setLight(colores_NE, 1);
     setLight(colores_OS, 1);
@@ -138,6 +151,7 @@ function t61_66(){
     setTimeout(t66_68, 5000);
 }
 function t66_68(){
+    ciclo_semaforos=12;
     apagarTodas();
     todoAlRojo();
 

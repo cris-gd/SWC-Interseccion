@@ -23,7 +23,6 @@ const sliderToRoute = {
 };
 
 // Registro de timestamps en que cada semáforo encendió el ámbar
-// clave: tlId, valor: Date.now() cuando se detectó el cambio a ámbar
 const amberOnTimestamps = {};
 
 // Volumen tráfico inicial es 0
@@ -34,41 +33,30 @@ let trafficVolumes = {
     'E-O': 0, 'E-S': 0, 'E-N': 0
 };
 
-// Almacenamiento de coches activos
 let activeCars = [];
 let carIdCounter = 0;
-
-// Intervalos de generación por dirección
 let generationIntervals = {};
 
-// Velocidad base de los coches (px por frame)
 const CAR_SPEED = 1.2;
-
-// Distancia mínima de seguridad entre coches (px entre la parte delantera del de atrás y la trasera del de delante)
 const MIN_SAFE_DISTANCE = 10;
-
-// Tasa de generación base (milisegundos entre generaciones por unidad de volumen)
-const BASE_GENERATION_INTERVAL = 1800; // 1.8 segundos para volumen 1
-const MIN_GENERATION_INTERVAL = 100;   // 200ms para volumen 5
+const BASE_GENERATION_INTERVAL = 1800;
+const MIN_GENERATION_INTERVAL = 100;
 
 // =====================================================
 // FUNCIONES AUXILIARES
 // =====================================================
 
-// Obtener intervalo de generación basado en volumen
 function getGenerationInterval(volume) {
     if (volume === 0) return null;
     const interval = BASE_GENERATION_INTERVAL / volume;
     return Math.max(MIN_GENERATION_INTERVAL, interval);
 }
 
-// Generar color aleatorio para coches
 function getRandomCarColor() {
     const hue = Math.random() * 360;
     return `hsl(${hue}, 75%, 55%)`;
 }
 
-// Obtener tipo de vehículo según probabilidad: 60% coche, 30% furgoneta, 10% camión
 function getRandomVehicleType() {
     const r = Math.random();
     if (r < 0.60) return 'car';
@@ -76,7 +64,6 @@ function getRandomVehicleType() {
     return 'truck';
 }
 
-// Dimensiones según tipo de vehículo
 function getVehicleDimensions(type) {
     switch(type) {
         case 'van':   return { h: 12, w: 22, rx: 4 };
@@ -86,16 +73,9 @@ function getVehicleDimensions(type) {
     }
 }
 
-// Duración total del ámbar (ms) — debe coincidir con ciclo_general.js
 const AMBER_DURATION_MS = 5000;
-// Margen final del ámbar que se trata como rojo (ms)
 const AMBER_RED_MARGIN_MS = 1000;
 
-// Obtener el estado actual de un semáforo.
-// Devuelve true (puede pasar) si está en verde,
-// o si está en ámbar Y lleva menos de (AMBER_DURATION_MS - AMBER_RED_MARGIN_MS) encendido.
-// Devuelve false (debe pararse) si está en rojo,
-// o si está en ámbar en su último segundo.
 function getTrafficLightState(tlId) {
     const tlGroup = document.getElementById(tlId)?.closest('g');
     if (!tlGroup) return false;
@@ -103,23 +83,19 @@ function getTrafficLightState(tlId) {
     const amberEl = tlGroup.querySelector('.tl-amber');
 
     if (greenEl && greenEl.classList.contains('on')) {
-        // Limpia registro de ámbar al pasar a verde
         delete amberOnTimestamps[tlId];
         return true;
     }
 
     if (amberEl && amberEl.classList.contains('on')) {
-        // Registrar cuándo se encendió el ámbar (solo la primera vez)
         if (!amberOnTimestamps[tlId]) {
             amberOnTimestamps[tlId] = Date.now();
         }
         const elapsed = Date.now() - amberOnTimestamps[tlId];
-        // Si estamos en el último segundo del ámbar → tratar como rojo
         if (elapsed >= AMBER_DURATION_MS - AMBER_RED_MARGIN_MS) return false;
         return true;
     }
 
-    // Rojo u otro estado
     delete amberOnTimestamps[tlId];
     return false;
 }
@@ -128,29 +104,18 @@ function getTrafficLightState(tlId) {
 // DISTANCIA DE SEGURIDAD
 // =====================================================
 
-// Largo total del vehículo incluyendo cabina delantera (furgoneta y camión).
-// El cuerpo mide dim.w; la cabina añade 7 px (van) o 10 px (truck) al frente.
 function getVehicleLength(type) {
     switch(type) {
-        case 'van':   return 22 + 7;   // cuerpo + cabina
+        case 'van':   return 22 + 7;
         case 'truck': return 35 + 10;
         case 'car':
-        default:      return 16;       // coches no tienen cabina separada
+        default:      return 16;
     }
 }
 
-// Determina si dos coches comparten el mismo carril lógico.
-// Se considera que dos coches están en el mismo carril si se mueven en la
-// misma dirección Y sus posiciones laterales son próximas (< LANE_TOL px).
-// Esto cubre el caso de N-S y N-O que ambos viajan hacia el S pero por
-// distintos carriles (x≈260 vs x≈320): con LANE_TOL=14 no solaparán.
-// También detecta cuando dos rutas distintas comparten el mismo carril
-// físico antes de la intersección (e.g. N-S y N-O arrancan en x=260 y x=320
-// respectivamente, que son carriles distintos → sin bloqueo mutuo).
 function sameLane(carA, carB) {
-    // Si ya han girado y van en dirección distinta, nunca mismo carril
     if (carA.direction !== carB.direction) return false;
-    const LANE_TOL = 14; // px de tolerancia lateral
+    const LANE_TOL = 14;
     if (carA.direction === 'S' || carA.direction === 'N') {
         return Math.abs(carA.x - carB.x) < LANE_TOL;
     } else {
@@ -158,59 +123,30 @@ function sameLane(carA, carB) {
     }
 }
 
-// ── Geometría de vehículos ───────────────────────────────────────────────────
-//
-// car.x / car.y es siempre la esquina superior-izquierda del rect LOCAL antes
-// de aplicar la rotación SVG.  Tras rotar:
-//
-//   S  rotate( 90): eje largo queda vertical, punta hacia abajo.
-//          frente (mayor y SVG) = car.y + len
-//          trasera               = car.y
-//
-//   N  rotate(-90): eje largo queda vertical, punta hacia arriba.
-//          El extremo (len,0) local va a (car.x, car.y - len) en SVG.
-//          frente (menor y SVG) = car.y - len
-//          trasera               = car.y
-//
-//   E  rotate(  0): eje largo horizontal, punta a la derecha.
-//          frente (mayor x SVG) = car.x + len
-//          trasera               = car.x
-//
-//   O  rotate(180): eje largo horizontal, punta a la izquierda.
-//          El extremo (len,0) local va a (car.x - len, car.y) en SVG.
-//          frente (menor x SVG) = car.x - len
-//          trasera               = car.x
-//
-// ────────────────────────────────────────────────────────────────────────────
-
 function getFrontCoord(car) {
     const len = getVehicleLength(car.type);
     switch (car.direction) {
-        case 'S': return car.y + len;   // frente apunta a y creciente
-        case 'N': return car.y - len;   // frente apunta a y decreciente
-        case 'E': return car.x + len;   // frente apunta a x creciente
-        case 'O': return car.x - len;   // frente apunta a x decreciente
+        case 'S': return car.y + len;
+        case 'N': return car.y - len;
+        case 'E': return car.x + len;
+        case 'O': return car.x - len;
     }
     return 0;
 }
 
 function getRearCoord(car) {
     switch (car.direction) {
-        case 'S': return car.y;         // trasera = esquina superior del rect rotado
-        case 'N': return car.y;         // trasera = punto de anclaje (mayor y)
-        case 'E': return car.x;         // trasera = borde izquierdo
-        case 'O': return car.x;         // trasera = punto de anclaje (mayor x)
+        case 'S': return car.y;
+        case 'N': return car.y;
+        case 'E': return car.x;
+        case 'O': return car.x;
     }
     return 0;
 }
 
-// Calcula el hueco (px) entre el frente de carA y la trasera de carB.
-// "Delante" significa en la dirección de avance de carA.
-// Devuelve Infinity si carB no está adelante o no es el mismo carril.
 function getGapToCarAhead(carA, carB) {
     if (!sameLane(carA, carB)) return Infinity;
 
-    // Coches en giro: ignorarlos solo si ya se han separado lateralmente
     if (carB.isTurning) {
         const lateralSep = (carA.direction === 'S' || carA.direction === 'N')
             ? Math.abs(carA.x - carB.x)
@@ -221,12 +157,6 @@ function getGapToCarAhead(carA, carB) {
     const frontA = getFrontCoord(carA);
     const rearB  = getRearCoord(carB);
 
-    // "carB está delante" significa que su trasera está MÁS ADELANTE que el frente de carA
-    // en la dirección de avance:
-    //   S → rearB (car.y) > frontA  (mayor y = más al sur = más adelante)
-    //   N → rearB (car.y) < frontA  (menor y = más al norte = más adelante)
-    //   E → rearB (car.x) > frontA  (mayor x = más al este = más adelante)
-    //   O → rearB (car.x) < frontA  (menor x = más al oeste = más adelante)
     switch (carA.direction) {
         case 'S': return rearB > frontA ? rearB - frontA : Infinity;
         case 'N': return rearB < frontA ? frontA - rearB : Infinity;
@@ -236,14 +166,7 @@ function getGapToCarAhead(carA, carB) {
     return Infinity;
 }
 
-// Devuelve true si el coche debe frenar/detenerse por el vehículo de delante.
-// Se aplica tanto en movimiento como en parada (para que los coches en cola
-// respeten la distancia aunque el primero esté parado en rojo).
-// Incluye coches en giro que físicamente ocupan espacio (via bounding-box lateral).
-// Devuelve true si el coche debe frenar/detenerse por el vehículo de delante.
-// Devuelve true si el coche debe frenar/detenerse por el vehículo de delante.
 function shouldStopForCarAhead(car) {
-    // Para coches en giro, usar una distancia de seguridad mayor
     if (car.isTurning) {
         const TURN_SAFE_DISTANCE = MIN_SAFE_DISTANCE * 2;
         for (const other of activeCars) {
@@ -257,12 +180,6 @@ function shouldStopForCarAhead(car) {
     for (const other of activeCars) {
         if (other.id === car.id) continue;
 
-        // Caso especial: el coche de delante está girando a la derecha en el mismo
-        // carril de origen. Aunque su dirección SVG ya diverge, físicamente bloquea
-        // el paso al coche que va recto. Se comprueba:
-        //   1. El otro está girando (isTurning).
-        //   2. Ambos comparten el mismo carril lateral de origen.
-        //   3. El otro está físicamente por delante de car.
         if (other.isTurning && other.from === car.from) {
             const LANE_TOL = 14;
             const sameStartLane =
@@ -289,43 +206,32 @@ function shouldStopForCarAhead(car) {
     }
     return false;
 }
-// Devuelve true si hay un coche en el punto de spawn que impediría
-// generar un nuevo vehículo sin solape.
+
 function isSpawnBlocked(from, to) {
     const startPos = getStartPosition(from, to);
     if (!startPos) return false;
-    const SPAWN_CLEARANCE = 55; // distancia mínima desde el spawn para que aparezca
+    const SPAWN_CLEARANCE = 55;
 
     for (const other of activeCars) {
         if (other.direction !== startPos.direction) continue;
-        // Comparar carril lateral
         const LANE_TOL = 14;
         if (startPos.direction === 'S' || startPos.direction === 'N') {
             if (Math.abs(other.x - startPos.x) >= LANE_TOL) continue;
         } else {
             if (Math.abs(other.y - startPos.y) >= LANE_TOL) continue;
         }
-        // Ver si el otro coche está dentro de la zona de spawn
-        // Para S/E el spawn está en coordenadas pequeñas y el coche avanza hacia valores mayores:
-        //   rearOther (= car.y o car.x, el punto de anclaje) debe estar lejos del spawn.
-        // Para N/O el spawn está en coordenadas grandes y el coche avanza hacia valores menores:
-        //   rearOther es también car.y / car.x (el punto de anclaje, que es la trasera en esas dirs).
         const rearOther = getRearCoord(other);
         switch(startPos.direction) {
             case 'S':
-                // spawn y=-30, avanza hacia sur; bloqueado si trasera < spawn+clearance
                 if (rearOther < startPos.y + SPAWN_CLEARANCE) return true;
                 break;
             case 'N':
-                // spawn y=700, avanza hacia norte; bloqueado si trasera > spawn-clearance
                 if (rearOther > startPos.y - SPAWN_CLEARANCE) return true;
                 break;
             case 'E':
-                // spawn x=-30, avanza hacia este; bloqueado si trasera < spawn+clearance
                 if (rearOther < startPos.x + SPAWN_CLEARANCE) return true;
                 break;
             case 'O':
-                // spawn x=930, avanza hacia oeste; bloqueado si trasera > spawn-clearance
                 if (rearOther > startPos.x - SPAWN_CLEARANCE) return true;
                 break;
         }
@@ -334,10 +240,150 @@ function isSpawnBlocked(from, to) {
 }
 
 // =====================================================
+// CAPACIDAD DE LA ZONA DE COLA (entre cebra y stop line)
+// =====================================================
+//
+// El espacio entre el paso de cebra y la línea de stop del semáforo
+// principal tiene una capacidad física limitada. Si ese espacio está
+// lleno, los vehículos que llegan deben detenerse ANTES del cebra,
+// no en él ni dentro de él.
+//
+// Zona de cola por dirección (coordenada del eje de avance):
+//   S → y ∈ [82, 230]   (cebra norte termina en y≈80, stop en y=230)
+//   N → y ∈ [450, 578]  (stop en y=450, cebra sur empieza en y≈580)
+//   E → x ∈ [82, 230]   (cebra oeste termina en x≈80, stop en x=230)
+//   O → x ∈ [450, 588]  (stop en x=450, cebra este empieza en x≈590)
+//
+// Espacio útil ≈ 148 px. La capacidad efectiva descuenta un hueco de
+// seguridad por vehículo: QUEUE_CAPACITY_PX = 138 px.
+//
+// Longitudes de vehículo (incluyendo cabina):
+//   car   → 16 px
+//   van   → 29 px
+//   truck → 45 px
+//
+// Esto hace que las siguientes combinaciones llenen la zona:
+//   2 camiones + cualquier otro → no caben (45+10 + 45+10 = 110; + 16+10 > 138)
+//   1 camión + 4 coches         → no caben (45+10 + (16+10)×3 + 16 = 149 > 138)
+//   5 coches + 1 furgoneta      → no caben ((16+10)×4 + 16+10 + 29 = 159 > 138)
+//   5 coches                    → el 6.º no cabe ((16+10)×4 + 16 = 120; +16+10 = 146 > 138)
+
+const QUEUE_CAPACITY_PX = 138;
+
+// Límites de la zona de cola por dirección (coordenada del eje de avance)
+const QUEUE_ZONE = {
+    'S': { axisMin: 82,  axisMax: 230 },
+    'N': { axisMin: 450, axisMax: 578 },
+    'E': { axisMin: 82,  axisMax: 230 },
+    'O': { axisMin: 450, axisMax: 588 }
+};
+
+// Zona entre el paso de cebra Este y las vías del tren, para vehículos
+// en dirección O (avanzan a x decreciente: frente = car.x - len).
+// Cebra Este termina en x≈620, vías empiezan en x≈751.
+// Espacio útil ≈ 131 px → misma capacidad que QUEUE_CAPACITY_PX (138 px).
+const TRAIN_QUEUE_ZONE_O = { axisMin: 621, axisMax: 745 };
+
+/**
+ * Calcula los px ocupados en la zona de cola para el carril de `car`.
+ * Suma la longitud solapada de cada vehículo ya en esa zona más un
+ * hueco de seguridad por cada uno.
+ */
+function getQueueOccupancy(direction, laneCoord) {
+    const zone = QUEUE_ZONE[direction];
+    if (!zone) return 0;
+
+    const LANE_TOL = 14;
+    let occupied = 0;
+
+    for (const other of activeCars) {
+        if (other.direction !== direction) continue;
+        if (other.hasTurned) continue;
+
+        const lateral = (direction === 'S' || direction === 'N') ? other.x : other.y;
+        if (Math.abs(lateral - laneCoord) >= LANE_TOL) continue;
+
+        const len = getVehicleLength(other.type);
+        let bodyMin, bodyMax;
+        if (direction === 'S' || direction === 'E') {
+            bodyMin = (direction === 'S') ? other.y : other.x;
+            bodyMax = bodyMin + len;
+        } else {
+            const anchor = (direction === 'N') ? other.y : other.x;
+            bodyMax = anchor;
+            bodyMin = anchor - len;
+        }
+
+        const overlapMin = Math.max(bodyMin, zone.axisMin);
+        const overlapMax = Math.min(bodyMax, zone.axisMax);
+        if (overlapMax > overlapMin) {
+            occupied += (overlapMax - overlapMin) + MIN_SAFE_DISTANCE;
+        }
+    }
+
+    return occupied;
+}
+
+/**
+ * Devuelve true si la zona de cola del carril de `car` no tiene espacio
+ * para albergar un vehículo adicional de ese tipo.
+ */
+function isQueueZoneFull(car) {
+    const zone = QUEUE_ZONE[car.direction];
+    if (!zone) return false;
+
+    const laneCoord = (car.direction === 'S' || car.direction === 'N') ? car.x : car.y;
+    const occupied  = getQueueOccupancy(car.direction, laneCoord);
+    const needed    = getVehicleLength(car.type) + MIN_SAFE_DISTANCE;
+
+    return (occupied + needed) > QUEUE_CAPACITY_PX;
+}
+
+/**
+ * Calcula los px ocupados en la zona entre el cebra Este y las vías del tren
+ * para vehículos en dirección O en el carril dado (coord y).
+ */
+function getTrainQueueOccupancyO(laneCoord) {
+    const zone = TRAIN_QUEUE_ZONE_O;
+    const LANE_TOL = 14;
+    let occupied = 0;
+
+    for (const other of activeCars) {
+        if (other.direction !== 'O') continue;
+
+        const lateral = other.y;
+        if (Math.abs(lateral - laneCoord) >= LANE_TOL) continue;
+
+        const len = getVehicleLength(other.type);
+        // Dir O: frente = car.x - len (x decreciente), trasera = car.x
+        const bodyMin = other.x - len;
+        const bodyMax = other.x;
+
+        const overlapMin = Math.max(bodyMin, zone.axisMin);
+        const overlapMax = Math.min(bodyMax, zone.axisMax);
+        if (overlapMax > overlapMin) {
+            occupied += (overlapMax - overlapMin) + MIN_SAFE_DISTANCE;
+        }
+    }
+
+    return occupied;
+}
+
+/**
+ * Devuelve true si la zona entre el cebra Este y las vías del tren
+ * no tiene espacio para un vehículo adicional (dirección O).
+ */
+function isTrainQueueZoneFull(car) {
+    if (car.direction !== 'O') return false;
+    const occupied = getTrainQueueOccupancyO(car.y);
+    const needed   = getVehicleLength(car.type) + MIN_SAFE_DISTANCE;
+    return (occupied + needed) > QUEUE_CAPACITY_PX;
+}
+
+// =====================================================
 // GENERACIÓN DE COCHES
 // =====================================================
 
-// Calcular posición inicial según origen y destino
 function getStartPosition(from, to) {
     switch(from) {
         case 'N':
@@ -356,7 +402,6 @@ function getStartPosition(from, to) {
     }
 }
 
-// Calcular la rotación SVG según la dirección de movimiento actual
 function rotationForDirection(dir) {
     switch(dir) {
         case 'S': return 90;
@@ -367,7 +412,6 @@ function rotationForDirection(dir) {
     }
 }
 
-// Crear un nuevo coche
 function createCar(from, to, tlId) {
     const startPos = getStartPosition(from, to);
 
@@ -376,7 +420,7 @@ function createCar(from, to, tlId) {
     const dim   = getVehicleDimensions(type);
     const carId = `car-${carIdCounter++}`;
 
-    const svg = document.getElementById('intersection-svg');
+    const vehiclesLayer = document.getElementById('layer-vehicles');
     const carGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     carGroup.setAttribute('id', carId);
     carGroup.setAttribute('class', 'car');
@@ -384,7 +428,6 @@ function createCar(from, to, tlId) {
     carGroup.setAttribute('data-to', to);
     carGroup.setAttribute('data-tl-id', tlId);
 
-    // Cuerpo principal
     const carRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     carRect.setAttribute('width',  String(dim.w));
     carRect.setAttribute('height', String(dim.h));
@@ -397,7 +440,6 @@ function createCar(from, to, tlId) {
     carRect.setAttribute('y', '0');
     carGroup.appendChild(carRect);
 
-    // Cabina delantera (furgoneta y camión)
     if (type === 'van' || type === 'truck') {
         const cabinDim = type === 'truck' ? 10 : 7;
         const cabin = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -413,7 +455,7 @@ function createCar(from, to, tlId) {
 
     const rotation = rotationForDirection(startPos.direction);
     carGroup.setAttribute('transform', `translate(${startPos.x}, ${startPos.y}) rotate(${rotation})`);
-    svg.appendChild(carGroup);
+    vehiclesLayer.appendChild(carGroup);
 
     const car = {
         id: carId,
@@ -427,7 +469,7 @@ function createCar(from, to, tlId) {
         y: startPos.y,
         active: true,
         isStopped: false,
-        targetDirection: to,  // dirección final tras el giro (N/S/E/O)
+        targetDirection: to,
         hasTurned: false,
         wasStoppedByExtraLight: false
     };
@@ -440,39 +482,8 @@ function createCar(from, to, tlId) {
 // ACTUALIZACIÓN DE POSICIONES (ANIMACIÓN)
 // =====================================================
 
-// Líneas de stop principales (coordenada SVG donde debe quedar el FRENTE del vehículo)
-//   S: frente = car.y + len  →  detener cuando frente >= 230  →  car.y = 230 - len
-//   N: frente = car.y - len  →  detener cuando frente <= 450  →  car.y = 450 + len
-//   E: frente = car.x + len  →  detener cuando frente >= 230  →  car.x = 230 - len
-//   O: frente = car.x - len  →  detener cuando frente <= 450  →  car.x = 450 + len
 const STOP_LINES = { 'S': 230, 'N': 450, 'E': 230, 'O': 450 };
 
-// ─── Geometría exacta de zonas prohibidas de parada ──────────────────────────
-//
-// Un vehículo NUNCA puede quedar parado (ni siquiera en cola) con ninguna parte
-// de su cuerpo dentro de estas bandas:
-//
-//   CEBRA NORTE  (vehículos dir S): banda y ∈ [50, 80]
-//   CEBRA SUR    (vehículos dir N): banda y ∈ [580, 610]
-//   CEBRA OESTE  (vehículos dir E): banda x ∈ [50, 80]
-//   CEBRA ESTE   (vehículos dir O): banda x ∈ [590, 620]
-//   VÍAS TREN    (vehículos dir O o E, carretera horizontal): banda x ∈ [751, 790]
-//
-// Líneas de stop de semáforos peatonales (frente del vehículo):
-//   Dir S → frente se detiene en y = 48  (2 px antes del cebra N en y=50)
-//   Dir N → frente se detiene en y = 612 (2 px después del cebra S en y=610, dir N avanza a y decreciente)
-//   Dir E → frente se detiene en x = 48
-//   Dir O → frente se detiene en x = 622
-//
-// Líneas de stop semáforo ferroviario (frente del vehículo):
-//   Dir O → frente se detiene en x = 749  (2 px antes de x=751)
-//   Dir E → frente se detiene en x = 792  (2 px después de x=790)
-//
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Bandas prohibidas indexadas por dirección de marcha.
-// Cada entrada: { coord: 'x'|'y', min, max }
-// "min" y "max" son coordenadas SVG del CUERPO (trasera..frente) del vehículo.
 const FORBIDDEN_ZONES = {
     'S': [{ coord: 'y', min: 50,  max: 80  }],
     'N': [{ coord: 'y', min: 580, max: 610 }],
@@ -482,7 +493,6 @@ const FORBIDDEN_ZONES = {
           { coord: 'x', min: 751, max: 790 }]
 };
 
-// Devuelve true si el vehículo (en su posición actual) solapa con alguna zona prohibida.
 function isInForbiddenZone(car) {
     const zones = FORBIDDEN_ZONES[car.direction];
     if (!zones) return false;
@@ -491,25 +501,17 @@ function isInForbiddenZone(car) {
     for (const z of zones) {
         let bodyMin, bodyMax;
         if (z.coord === 'y') {
-            // Dir S: trasera = car.y, frente = car.y + len
-            // Dir N: frente = car.y - len, trasera = car.y  → bodyMin = car.y-len, bodyMax = car.y
             bodyMin = (car.direction === 'S') ? car.y       : car.y - len;
             bodyMax = (car.direction === 'S') ? car.y + len : car.y;
         } else {
-            // Dir E: trasera = car.x, frente = car.x + len
-            // Dir O: frente = car.x - len, trasera = car.x
             bodyMin = (car.direction === 'E') ? car.x       : car.x - len;
             bodyMax = (car.direction === 'E') ? car.x + len : car.x;
         }
-        // Solapamiento: los rangos se cruzan
         if (bodyMax > z.min && bodyMin < z.max) return true;
     }
     return false;
 }
 
-// Devuelve la lista de semáforos adicionales (peatonales + ferroviarios) que
-// debe respetar un coche dado, con su línea de stop (coordenada SVG del FRENTE).
-// Solo se añaden los checks relevantes para la posición actual del vehículo.
 function getExtraStopChecks(car) {
     const checks = [];
     const front = getFrontCoord(car);
@@ -517,64 +519,95 @@ function getExtraStopChecks(car) {
     switch (car.direction) {
 
         case 'S':
-            // Cebra Norte: y=50..80. El frente (car.y+len) debe detenerse en y=48.
-            // Solo antes de haberlo superado (front < 82).
             if (!car.hasTurned && front < 82) {
                 checks.push({ tlId: 'tlp-N-O', stopLine: 48 });
                 checks.push({ tlId: 'tlp-N-E', stopLine: 48 });
             }
+            if (front > 568 && front < 600) {
+                if(car.from=='N'){
+                    car.hasTurned = true;
+                }
+                checks.push({ tlId: 'tlp-S-O', stopLine: 575 });
+                checks.push({ tlId: 'tlp-S-E', stopLine: 575 });
+            }
             break;
 
         case 'N':
-            // Cebra Sur: y=580..610. Dir N avanza a y decreciente; frente = car.y-len.
-            // "Antes del paso" = frente > 612. Superado = frente < 578.
             if (!car.hasTurned && front > 578) {
                 checks.push({ tlId: 'tlp-S-O', stopLine: 612 });
                 checks.push({ tlId: 'tlp-S-E', stopLine: 612 });
             }
+            if (front < 100 && front > 66) {
+                if(car.from=='S'){
+                    car.hasTurned = true;
+                }
+                checks.push({ tlId: 'tlp-N-O', stopLine: 88 });
+                checks.push({ tlId: 'tlp-N-E', stopLine: 88 });
+            }
             break;
 
         case 'E':
-            // Cebra Oeste: x=50..80. Frente = car.x+len debe detenerse en x=48.
             if (!car.hasTurned && front < 82) {
                 checks.push({ tlId: 'tlp-O-N', stopLine: 48 });
                 checks.push({ tlId: 'tlp-O-S', stopLine: 48 });
             }
-            // Vías tren: x=751..790. Frente debe detenerse en x=792 (viniendo del O,
-            // dir E avanza a x creciente, detener ANTES de x=751: frente en x=749).
-            // Dir E viene del Oeste; las vías están a la derecha de la intersección.
-            // El coche habrá girado antes si su destino no es E recto, pero para
-            // los que sigan recto (O-E o los que giraron y ahora van E), aplica.
             if (front > 680 && front < 793) {
-                checks.push({ tlId: 'rail-tl-N', stopLine: 749 });
+                checks.push({ tlId: 'rail-tl-N', stopLine: 744 });
+            }
+            if (front > 568 && front < 600) {
+                if(car.from=='O'){
+                    car.hasTurned = true;
+                }
+                checks.push({ tlId: 'tlp-E-N', stopLine: 585 });
+                checks.push({ tlId: 'tlp-E-S', stopLine: 585 });
             }
             break;
 
         case 'O':
-            // Cebra Este: x=590..620. Dir O avanza a x decreciente; frente = car.x-len.
-            // "Antes del paso" = frente > 622. Superado = frente > 588.
             if (!car.hasTurned && front > 588) {
                 checks.push({ tlId: 'tlp-E-N', stopLine: 622 });
                 checks.push({ tlId: 'tlp-E-S', stopLine: 622 });
             }
-            // Vías tren: x=751..790. Dir O avanza a x decreciente; frente = car.x-len.
-            // Detener antes de x=790: frente en x=792 (el frente aún no llegó a 790).
-            // Rango activo: frente entre 792 y 680 (antes de cruzar, no después).
-            if (front < 793 && front > 680) {
-                checks.push({ tlId: 'rail-tl-S', stopLine: 800 });
+            if (front < 805 && front > 680) {
+                checks.push({ tlId: 'rail-tl-S', stopLine: 802 });
+            }
+            if (front < 100 && front > 66) {
+                if(car.from=='E'){
+                    car.hasTurned = true;
+                }
+                checks.push({ tlId: 'tlp-O-N', stopLine: 88 });
+                checks.push({ tlId: 'tlp-O-S', stopLine: 88 });
             }
             break;
     }
-
+    
     return checks;
 }
 
-// Evalúa un semáforo extra con su línea de stop.
-// Misma lógica que shouldStopAtTrafficLight pero parametrizada.
-// Devuelve true si el vehículo debe detenerse ante este semáforo.
+// Conjunto de IDs de semáforos peatonales, para distinguirlos de los ferroviarios
+const PEDESTRIAN_TL_IDS = new Set([
+    'tlp-N-O', 'tlp-N-E',
+    'tlp-S-O', 'tlp-S-E',
+    'tlp-O-N', 'tlp-O-S',
+    'tlp-E-N', 'tlp-E-S'
+]);
+
 function checkExtraLight(car, tlId, stopLine) {
+    
     const isGreen = getTrafficLightState(tlId);
-    if (isGreen) return false;
+
+    // Para semáforos peatonales: bloquear también si la zona de cola está llena,
+    // aunque el semáforo esté en verde. Así los vehículos se paran antes del
+    // cebra en lugar de quedarse encima de él.
+    const esPeatonal = PEDESTRIAN_TL_IDS.has(tlId);
+    const colaLlena  = esPeatonal && !car.hasTurned && isQueueZoneFull(car);
+
+    // Para el semáforo ferroviario en dir O: bloquear también si la zona entre
+    // el cebra Este y las vías está llena, para evitar coches parados en esa banda.
+    const esTrenO = (tlId === 'rail-tl-S') && car.direction === 'O';
+    const colaTrenLlena = esTrenO && isTrainQueueZoneFull(car);
+
+    if (isGreen && !colaLlena && !colaTrenLlena) return false;
 
     const front = getFrontCoord(car);
     const len   = getVehicleLength(car.type);
@@ -601,7 +634,7 @@ function checkExtraLight(car, tlId, stopLine) {
         case 'S': car.y = stopLine - len; break;
         case 'N': car.y = stopLine + len; break;
         case 'E': car.x = stopLine - len; break;
-        case 'O': car.x = stopLine + len; break;
+        case 'O': car.x = stopLine + len; break;  // front = car.x - len = stopLine ✓
     }
     car.isStopped = true;
     car.wasStoppedByExtraLight = true;
@@ -610,21 +643,22 @@ function checkExtraLight(car, tlId, stopLine) {
 
 function shouldStopAtTrafficLight(car) {
     if (car.wasStoppedByExtraLight) {
-    const extraChecks = getExtraStopChecks(car);
+        const extraChecks = getExtraStopChecks(car);
 
-    // Si YA no está bloqueado por ningún semáforo secundario → avanzar
-    const stillBlocked = extraChecks.some(({ tlId, stopLine }) =>
-        checkExtraLight(car, tlId, stopLine)
-    );
+        // Si YA no está bloqueado por ningún semáforo secundario → avanzar
+        const stillBlocked = extraChecks.some(({ tlId, stopLine }) =>
+            checkExtraLight(car, tlId, stopLine)
+        );
 
-    if (!stillBlocked) {
-        car.wasStoppedByExtraLight = false;
-        car.isStopped = false;
-        return false; // 👈 IGNORA semáforo principal temporalmente
+        if (!stillBlocked) {
+            car.wasStoppedByExtraLight = false;
+            car.isStopped = false;
+            return false;
+        }
+
+        return true;
     }
 
-    return true; // sigue parado por el secundario
-}
     // ── 1. Semáforo principal de la ruta ────────────────────────────────────
     const isGreen = getTrafficLightState(car.tlId);
     if (isGreen) {
@@ -636,7 +670,6 @@ function shouldStopAtTrafficLight(car) {
             const front = getFrontCoord(car);
             const len   = getVehicleLength(car.type);
 
-            // Punto de no retorno
             let pastLine = false;
             switch (car.direction) {
                 case 'S': pastLine = front > stopLine + 10; break;
@@ -646,7 +679,6 @@ function shouldStopAtTrafficLight(car) {
             }
 
             if (!pastLine) {
-                // No ha llegado aún
                 let beforeLine = false;
                 switch (car.direction) {
                     case 'S': beforeLine = front < stopLine; break;
@@ -655,7 +687,6 @@ function shouldStopAtTrafficLight(car) {
                     case 'O': beforeLine = front > stopLine; break;
                 }
                 if (!beforeLine) {
-                    // Anclar en línea principal
                     switch (car.direction) {
                         case 'S': car.y = stopLine - len; break;
                         case 'N': car.y = stopLine + len; break;
@@ -664,11 +695,8 @@ function shouldStopAtTrafficLight(car) {
                     }
                     car.isStopped = true;
                     return true;
-                } else {
-                    // Todavía lejos: seguir avanzando
                 }
             }
-            // si pastLine → dejar pasar (ya cruzó)
         }
     }
 
@@ -680,8 +708,6 @@ function shouldStopAtTrafficLight(car) {
         }
     }
 
-    // Ningún semáforo (ni principal ni extra) está bloqueando:
-    // limpiar isStopped para que el coche pueda arrancar
     if (isGreen) car.isStopped = false;
 
     return false;
@@ -691,46 +717,35 @@ function needsToTurn(car) {
     return car.direction !== car.targetDirection;
 }
 
-// Obtener datos del giro según ruta
-// Obtener datos del giro según ruta
 function getTurnPoint(car) {
 
     const turnMap = {
         'N-S': null, 'S-N': null, 'O-E': null, 'E-O': null,
 
-        // GIROS DERECHA N-O: mantener X constante
         'N-O': { 
             cp1x: 260, cp1y: 245,
             cp2x: 260, cp2y: 260,
             endX: 260, endY: 260,
             keepConstant: 'X'
         },
-        
-        // GIROS DERECHA S-E: mantener X constante
         'S-E': { 
             cp1x: 420, cp1y: 435,
             cp2x: 420, cp2y: 420,
             endX: 420, endY: 420,
             keepConstant: 'X'
         },
-        
-        // GIROS DERECHA E-N: mantener Y constante
         'E-N': { 
             cp1x: 440, cp1y: 260,
             cp2x: 425, cp2y: 260,
             endX: 425, endY: 260,
             keepConstant: 'Y'
         },
-        
-        // GIROS DERECHA O-S: mantener Y constante
         'O-S': { 
             cp1x: 245, cp1y: 420,
             cp2x: 260, cp2y: 420,
             endX: 260, endY: 420,
             keepConstant: 'Y'
         },
-
-        // GIROS IZQUIERDA
         'N-E': { 
             cp1x: 320, cp1y: 335,
             cp2x: 380, cp2y: 345,
@@ -760,7 +775,6 @@ function getTurnPoint(car) {
     return turnMap[`${car.from}-${car.to}`];
 }
 
-// Función mejorada para determinar cuándo iniciar un giro
 function shouldStartTurn(car) {
     if (car.hasTurned || !needsToTurn(car)) return false;
     
@@ -769,19 +783,16 @@ function shouldStartTurn(car) {
     
     const front = getFrontCoord(car);
     
-    // Umbrales base según la dirección (centrados en la intersección)
     const turnThresholds = {
-        'S': { start: 230, end: 280 },  // Viene del Norte
-        'N': { start: 450, end: 400 },  // Viene del Sur
-        'E': { start: 230, end: 280 },  // Viene del Oeste
-        'O': { start: 450, end: 400 }   // Viene del Este
+        'S': { start: 230, end: 280 },
+        'N': { start: 450, end: 400 },
+        'E': { start: 230, end: 280 },
+        'O': { start: 450, end: 400 }
     };
     
     const thresholds = turnThresholds[car.direction];
     if (!thresholds) return false;
     
-    // Ajustar umbrales según el tipo de vehículo
-    // Los vehículos más largos necesitan empezar el giro más tarde
     let startThreshold = thresholds.start;
     let endThreshold = thresholds.end;
     
@@ -804,22 +815,16 @@ function shouldStartTurn(car) {
             break;
         case 'car':
         default:
-            // Los coches tienen los umbrales base
             break;
     }
     
-    // Verificar si el frente del vehículo está dentro del rango de inicio de giro
     if (car.direction === 'S' || car.direction === 'E') {
-        // Direcciones que avanzan hacia valores crecientes
         return front >= startThreshold && front <= endThreshold;
     } else {
-        // Direcciones que avanzan hacia valores decrecientes (N y O)
         return front <= startThreshold && front >= endThreshold;
     }
 }
 
-// Función principal de movimiento
-// Función principal de movimiento (CORREGIDA)
 function moveCar(car) {
     if (!car.active) return;
 
@@ -845,7 +850,6 @@ function moveCar(car) {
         if (minGap > MIN_SAFE_DISTANCE + CAR_SPEED) {
             const vehicleLen = getVehicleLength(car.type);
 
-            // Calcular posición provisional tras avanzar un paso
             let nextX = car.x, nextY = car.y;
             switch(car.direction) {
                 case 'S': nextY = car.y + CAR_SPEED; break;
@@ -854,7 +858,6 @@ function moveCar(car) {
                 case 'O': nextX = car.x - CAR_SPEED; break;
             }
 
-            // No sobrepasar la línea de stop principal
             let beyondStop = false;
             switch(car.direction) {
                 case 'S': beyondStop = (nextY + vehicleLen >= stopLine); break;
@@ -863,12 +866,8 @@ function moveCar(car) {
                 case 'O': beyondStop = (nextX - vehicleLen <= stopLine); break;
             }
 
-            // Comprobar si la posición provisional entraría en una zona prohibida
             const testCar = Object.assign({}, car, { x: nextX, y: nextY });
             const wouldEnterForbidden = isInForbiddenZone(testCar);
-
-            // Si ya estamos en zona prohibida (raro pero posible en el primer frame),
-            // continuar avanzando para salir cuanto antes
             const alreadyInForbidden = isInForbiddenZone(car);
 
             if (!beyondStop && (!wouldEnterForbidden || alreadyInForbidden)) {
@@ -879,29 +878,24 @@ function moveCar(car) {
     }
 
     if (canMove) {
-        // Iniciar giro si procede
         if (!car.hasTurned && needsToTurn(car)) {
             if (shouldStartTurn(car) && !car.isTurning) {
                 const turnData = getTurnPoint(car);
                 if (turnData) {
-                    // Iniciar giro
                     car.isTurning = true;
                     car.turnProgress = 0;
                     car.turnStartX = car.x;
                     car.turnStartY = car.y;
                     car.turnData = turnData;
-                    // Guardar rotación inicial para interpolación suave
                     car.startRotation = rotationForDirection(car.direction);
                 }
             }
         }
 
-        // Procesar movimiento
         if (car.isTurning && car.turnData) {
             const t = car.turnProgress;
             const td = car.turnData;
             
-            // Usar ease-in-out para movimiento más natural
             const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
             
             const t2 = easeT * easeT;
@@ -910,19 +904,15 @@ function moveCar(car) {
             const mt2 = mt * mt;
             const mt3 = mt2 * mt;
 
-            // Curva de Bézier cúbica con ease
             car.x = mt3 * car.turnStartX + 3 * mt2 * easeT * td.cp1x + 3 * mt * t2 * td.cp2x + t3 * td.endX;
             car.y = mt3 * car.turnStartY + 3 * mt2 * easeT * td.cp1y + 3 * mt * t2 * td.cp2y + t3 * td.endY;
 
-            /// Para giros con constante, forzar el valor correspondiente
             if (td.keepConstant === 'X') {
-                car.x = td.cp1x;  // Mantener X constante
+                car.x = td.cp1x;
             } else if (td.keepConstant === 'Y') {
-                car.y = td.cp1y;  // Mantener Y constante
+                car.y = td.cp1y;
             }
 
-            // Incremento de progreso más pequeño para giro más suave
-            // Los vehículos largos giran más lento para mantener la trayectoria
             const LEFT_TURNS = new Set(['N-E', 'S-O', 'E-S', 'O-N']);
             const isLeftTurn = LEFT_TURNS.has(`${car.from}-${car.to}`);
 
@@ -932,13 +922,11 @@ function moveCar(car) {
             } else if (car.type === 'van') {
                 turnSpeed = isLeftTurn ? 0.007 : 0.04;
             } else {
-                // car
                 turnSpeed = isLeftTurn ? 0.007 : 0.06;
             }
             const newT = t + turnSpeed;
 
             if (newT >= 1) {
-                // Giro completado
                 car.x = td.endX;
                 car.y = td.endY;
                 car.direction = car.targetDirection;
@@ -955,7 +943,6 @@ function moveCar(car) {
             }
         } 
         else if (!car.isTurning) {
-            // Movimiento recto normal
             switch(car.direction) {
                 case 'S': car.y += CAR_SPEED; break;
                 case 'N': car.y -= CAR_SPEED; break;
@@ -967,7 +954,6 @@ function moveCar(car) {
 
     updateCarTransform(car);
 
-    // Eliminación por salida
     const outOfBounds =
         car.x < -100 || car.x > 1000 ||
         (car.direction === 'N' ? getFrontCoord(car) < -40 : car.y < -40) ||
@@ -978,17 +964,14 @@ function moveCar(car) {
     }
 }
 
-// Actualizar la transformación SVG del coche
 function updateCarTransform(car) {
     if (!car.element) return;
 
     let rotation;
 
     if (car.isTurning && car.turnData) {
-        // Interpolación suave de rotación durante el giro
         const t = car.turnProgress;
         
-        // Usar la misma función ease para la rotación
         const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
         
         let endRotation;
@@ -1002,22 +985,18 @@ function updateCarTransform(car) {
         
         let startRot = car.startRotation || rotationForDirection(car.direction);
         
-        // Calcular la diferencia más corta
         let delta = endRotation - startRot;
         if (delta > 180) delta -= 360;
         if (delta < -180) delta += 360;
         
-        // Interpolación lineal con ease
         rotation = startRot + delta * easeT;
     } else {
-        // Movimiento recto: rotación según dirección actual
         rotation = rotationForDirection(car.direction);
     }
 
     car.element.setAttribute('transform', `translate(${car.x}, ${car.y}) rotate(${rotation})`);
 }
 
-// Eliminar coche del DOM y del array
 function removeCar(carId) {
     const index = activeCars.findIndex(c => c.id === carId);
     if (index !== -1) {
@@ -1027,13 +1006,13 @@ function removeCar(carId) {
     }
 }
 
-// Bucle de animación
 let animationFrameId = null;
 
 function animate() {
     for (let i = 0; i < activeCars.length; i++) {
         moveCar(activeCars[i]);
     }
+    
     animationFrameId = requestAnimationFrame(animate);
 }
 
@@ -1055,9 +1034,6 @@ function startGenerationForRoute(routeKey, volume) {
     if (!interval) return;
 
     generationIntervals[routeKey] = setInterval(() => {
-        // Generar siempre que haya hueco físico en el spawn,
-        // independientemente del estado del semáforo.
-        // El coche avanzará y se detendrá solo en la línea de parada si hay rojo.
         if (!isSpawnBlocked(route.from, route.to)) {
             createCar(route.from, route.to, route.tlId);
         }
@@ -1101,7 +1077,6 @@ function initSliders() {
         }
     }
 }
-
 
 // =====================================================
 // LIMPIEZA

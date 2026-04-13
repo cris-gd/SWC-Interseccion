@@ -9,6 +9,7 @@ const direc_E = document.querySelectorAll("[id^='tl-'][id$='-E'] circle");
 const direc_N = document.querySelectorAll("[id^='tl-'][id$='-N'] circle");
 const direc_S = document.querySelectorAll("[id^='tl-'][id$='-S'] circle");
 
+
 // Todos los peatones empiezan en verde
 function todoAlVerdePeatones() {
     for (let i = 2; i < semaforos_peatones.length; i += 3) {
@@ -92,6 +93,17 @@ function desbloquearVehiculos(semV) {
     }
 }
 
+function finBloqueo(circles, index) {
+    // Si cualquier luz del grupo está bloqueada, no tocar nada
+    for (let i = 0; i < circles.length; i++) {
+        if (circles[i].classList.contains("bloqueado")) return;
+    }
+    for (let i = 0; i < circles.length; i++) {
+        circles[i].classList.remove("on");
+    }
+    circles[index].classList.add("on");
+}
+
 function activarPeaton(dir) {
     if (bloqueando[dir]) return;
     bloqueando[dir] = true;
@@ -119,6 +131,76 @@ function activarPeaton(dir) {
             // Paso 5: Desbloquear vehículos (vuelven a su ciclo normal)
             desbloquearVehiculos(semV);
             bloqueando[dir] = false;
+            //console.log(ciclo_semaforos);
+            switch(dir){
+                case 'N':
+                    switch(ciclo_semaforos){
+                        case 1:          
+                            finBloqueo(colores_EN, 2);
+                            break;
+                        case 4:
+                            finBloqueo(colores_ON, 2);
+                            break;
+                        case 7:
+                            finBloqueo(colores_SN, 2);
+                            break;
+                        case 10:
+                            finBloqueo(colores_EN, 2);
+                            break;
+                    }
+                    break;
+                case 'S':
+                    switch(ciclo_semaforos){
+                        case 1:          
+                            finBloqueo(colores_OS, 2);
+                            break;
+                        case 4:
+                            finBloqueo(colores_ES, 2);
+                            break;
+                        case 7:
+                            finBloqueo(colores_NS, 2);
+                            break;
+                        case 10:
+                            finBloqueo(colores_OS, 2);
+                            break;
+                    }
+                    break;
+                case 'E':
+                    if(bloqueo_tren == false){
+                        switch(ciclo_semaforos){
+                            case 1:          
+                                finBloqueo(colores_OE, 2);
+                                break;
+                            case 4:
+                                finBloqueo(colores_SE, 2);
+                                break;
+                            case 7:
+                                finBloqueo(colores_SE, 2);
+                                break;
+                            case 10:
+                                finBloqueo(colores_NE, 2);
+                                break;
+                        }
+                        break;
+                    }
+                    
+                case 'O':
+                    switch(ciclo_semaforos){
+                        case 1:          
+                            finBloqueo(colores_EO, 2);
+                            break;
+                        case 4:
+                            finBloqueo(colores_NO, 2);
+                            break;
+                        case 7:
+                            finBloqueo(colores_NO, 2);
+                            break;
+                        case 10:
+                            finBloqueo(colores_SO, 2);
+                            break;
+                    }
+                    break;
+            }
         }, 10000); // 10 segundos totales en rojo
         
     }, 5000); // Tiempo que el semáforo peatonal está en ámbar
