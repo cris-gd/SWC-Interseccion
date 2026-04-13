@@ -825,11 +825,50 @@ function shouldStartTurn(car) {
     }
 }
 
+
+// Detiene un coche normal ante una emergencia activa en su vía (igual que rojo)
+function _shouldStopForcedByEmergency(car) {
+    const stopLine = STOP_LINES[car.direction];
+    if (stopLine === undefined) return true;
+
+    const front = getFrontCoord(car);
+    const len   = getVehicleLength(car.type);
+
+    // Ya cruzó la stop-line → dejar que despeje la intersección
+    const pastLine =
+        (car.direction === 'S' || car.direction === 'E')
+            ? front > stopLine + 10
+            : front < stopLine - 10;
+    if (pastLine) return false;
+
+    // Aún no ha llegado a la stop-line → parar
+    const beforeLine =
+        (car.direction === 'S' || car.direction === 'E')
+            ? front < stopLine
+            : front > stopLine;
+    if (beforeLine) { car.isStopped = true; return true; }
+
+    // Exactamente sobre la línea → anclar
+    switch (car.direction) {
+        case 'S': car.y = stopLine - len; break;
+        case 'N': car.y = stopLine + len; break;
+        case 'E': car.x = stopLine - len; break;
+        case 'O': car.x = stopLine + len; break;
+    }
+    car.isStopped = true;
+    return true;
+}
+
 function moveCar(car) {
     if (!car.active) return;
 
+    // Los vehículos de emergencia tienen su propio bucle de movimiento
+    if (car.isEmergency) return;
+
     // ── 1. Evaluar semáforo ──────────────────────────────────────────────────
-    const blockedByLight = shouldStopAtTrafficLight(car);
+    // Si hay emergencia activa en otra vía, este coche para aunque tenga verde
+    const blockedByLight = car.emergencyForced ? _shouldStopForcedByEmergency(car)
+                                               : shouldStopAtTrafficLight(car);
 
     // ── 2. Evaluar distancia de seguridad ────────────────────────────────────
     const blockedByCar = shouldStopForCarAhead(car);
@@ -1009,10 +1048,13 @@ function removeCar(carId) {
 let animationFrameId = null;
 
 function animate() {
+    // Mover vehículos de emergencia (lógica propia, ignora semáforos)
+    if (typeof updateAllEmergency === 'function') updateAllEmergency();
+
     for (let i = 0; i < activeCars.length; i++) {
         moveCar(activeCars[i]);
     }
-    
+
     animationFrameId = requestAnimationFrame(animate);
 }
 

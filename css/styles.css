@@ -109,17 +109,24 @@ main {
 }
 
 /* ─── CONTROL PANEL ─── */
+
 .control-panel {
-    width: 220px;
-    min-width: 220px;
-    background: var(--panel-bg);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    padding: 10px 14px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 0.7fr 0.7fr;
+    width: 320px;
+    gap: 8px;
+    width: auto;
+    min-width: unset;
+    padding: 8px;
+    align-items: start;
+}
+.control-panel > * {
+    min-width: 0;
+}
+
+
+.volumen-grid {
+    grid-template-columns: 0.6fr;
 }
 
 .panel-title {
@@ -162,14 +169,14 @@ main {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 3px 8px;
+    padding: 3px 4px;
     background: var(--surface);
     border: 1px solid var(--border-soft);
     border-radius: 6px;
 }
  
 .vol-group-header {
-    font-family: 'Share Tech Mono', monospace;
+    font-family: 'Barlow Condensed', sans-serif;
     font-size: 0.68rem;
     font-weight: 700;
     color: var(--accent);
@@ -180,13 +187,14 @@ main {
 .vol-row {
     display: flex;
     align-items: center;
+    gap: 2px;
 }
  
 .vol-dest {
     font-family: 'Share Tech Mono', monospace;
     font-size: 0.60rem;
     color: var(--text-dim);
-    width: 22px;
+    width: 16px;
     flex-shrink: 0;
 }
  
@@ -195,23 +203,25 @@ main {
     accent-color: var(--accent);
     cursor: pointer;
     height: 2px;
+    min-width: 0;
 }
  
 .vol-label {
     font-family: 'Share Tech Mono', monospace;
     font-size: 0.65rem;
     color: var(--text);
-    width: 10px;
+    width: 6px;
     text-align: right;
     flex-shrink: 0;
 }
+
 
 .boton-peatones {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 0.6rem;
     font-weight: 700;
-    width: 25px;
-    height: 25px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: none;
     background: var(--surface);
@@ -279,6 +289,26 @@ main {
     grid-column: 1;
     grid-row: 2;
     justify-self: end;
+}
+
+input[type="number"], 
+select, 
+#btn-send-emergency {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.7rem;
+    color: var(--text);
+    width: 100%;
+    cursor: pointer;
+}
+
+input[type="number"]:focus, 
+select:focus {
+    border-color: var(--accent);
+    outline: none;
 }
 
 
