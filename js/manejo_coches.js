@@ -284,6 +284,10 @@ const QUEUE_ZONE = {
 // Espacio útil ≈ 131 px → misma capacidad que QUEUE_CAPACITY_PX (138 px).
 const TRAIN_QUEUE_ZONE_O = { axisMin: 621, axisMax: 745 };
 
+// Zona entre el cebra Este y las vías para dirección E (frente = car.x + len, x creciente).
+// Impide que coches en dirección E queden parados encima del cebra o de las vías.
+const TRAIN_QUEUE_ZONE_E = { axisMin: 591, axisMax: 744 };
+
 /**
  * Calcula los px ocupados en la zona de cola para el carril de `car`.
  * Suma la longitud solapada de cada vehículo ya en esa zona más un
@@ -343,19 +347,19 @@ function isQueueZoneFull(car) {
  * Calcula los px ocupados en la zona entre el cebra Este y las vías del tren
  * para vehículos en dirección O en el carril dado (coord y).
  */
-function getTrainQueueOccupancyO(laneCoord) {
+function getTrainQueueOccupancyO(laneCoord, selfId) {
     const zone = TRAIN_QUEUE_ZONE_O;
     const LANE_TOL = 14;
     let occupied = 0;
 
     for (const other of activeCars) {
         if (other.direction !== 'O') continue;
+        if (other.id === selfId) continue;
 
         const lateral = other.y;
         if (Math.abs(lateral - laneCoord) >= LANE_TOL) continue;
 
         const len = getVehicleLength(other.type);
-        // Dir O: frente = car.x - len (x decreciente), trasera = car.x
         const bodyMin = other.x - len;
         const bodyMax = other.x;
 
@@ -372,10 +376,61 @@ function getTrainQueueOccupancyO(laneCoord) {
 /**
  * Devuelve true si la zona entre el cebra Este y las vías del tren
  * no tiene espacio para un vehículo adicional (dirección O).
+ * No bloquea al coche si ya está dentro de la zona (debe poder salir).
  */
 function isTrainQueueZoneFull(car) {
     if (car.direction !== 'O') return false;
-    const occupied = getTrainQueueOccupancyO(car.y);
+    const front = getFrontCoord(car);
+    if (front < TRAIN_QUEUE_ZONE_O.axisMax - getVehicleLength(car.type)) return false;
+    const occupied = getTrainQueueOccupancyO(car.y, car.id);
+    const needed   = getVehicleLength(car.type) + MIN_SAFE_DISTANCE;
+    return (occupied + needed) > QUEUE_CAPACITY_PX;
+}
+
+/**
+ * Calcula los px ocupados en la zona entre el cebra Este y las vías
+ * para vehículos en dirección E en el carril dado (coord y).
+ * Excluye el coche `self` para no contarse a sí mismo.
+ */
+function getTrainQueueOccupancyE(laneCoord, selfId) {
+    const zone = TRAIN_QUEUE_ZONE_E;
+    const LANE_TOL = 14;
+    let occupied = 0;
+
+    for (const other of activeCars) {
+        if (other.direction !== 'E') continue;
+        if (other.id === selfId) continue;          // ← no contarse a uno mismo
+
+        const lateral = other.y;
+        if (Math.abs(lateral - laneCoord) >= LANE_TOL) continue;
+
+        const len = getVehicleLength(other.type);
+        // Dir E: frente = car.x + len (x creciente), trasera = car.x
+        const bodyMin = other.x;
+        const bodyMax = other.x + len;
+
+        const overlapMin = Math.max(bodyMin, zone.axisMin);
+        const overlapMax = Math.min(bodyMax, zone.axisMax);
+        if (overlapMax > overlapMin) {
+            occupied += (overlapMax - overlapMin) + MIN_SAFE_DISTANCE;
+        }
+    }
+
+    return occupied;
+}
+
+/**
+ * Devuelve true si la zona entre el cebra Este y las vías del tren
+ * no tiene espacio para un vehículo adicional (dirección E).
+ * No bloquea al coche si ya está dentro de la zona (debe poder salir).
+ */
+function isTrainQueueZoneFullE(car) {
+    if (car.direction !== 'E') return false;
+    // Si el coche ya está dentro de la zona (pasó el cebra), no bloquearlo:
+    // debe poder avanzar para despejar las vías, no quedarse congelado.
+    const front = getFrontCoord(car);
+    if (front > TRAIN_QUEUE_ZONE_E.axisMin + getVehicleLength(car.type)) return false;
+    const occupied = getTrainQueueOccupancyE(car.y, car.id);
     const needed   = getVehicleLength(car.type) + MIN_SAFE_DISTANCE;
     return (occupied + needed) > QUEUE_CAPACITY_PX;
 }
@@ -551,7 +606,9 @@ function getExtraStopChecks(car) {
                 checks.push({ tlId: 'tlp-O-N', stopLine: 48 });
                 checks.push({ tlId: 'tlp-O-S', stopLine: 48 });
             }
-            if (front > 680 && front < 793) {
+            // Zona de vías del tren: detener ANTES de entrar (stopLine 744).
+            // Solo se activa si el frente aún no llegó a las vías (< 751).
+            if (front > 620 && front < 751) {
                 checks.push({ tlId: 'rail-tl-N', stopLine: 744 });
             }
             if (front > 568 && front < 600) {
@@ -560,6 +617,13 @@ function getExtraStopChecks(car) {
                 }
                 checks.push({ tlId: 'tlp-E-N', stopLine: 585 });
                 checks.push({ tlId: 'tlp-E-S', stopLine: 585 });
+            }
+            // Coche que ya pasó el cebra Este pero aún no llegó a las vías:
+            // si hay peatones cruzando ese cebra, detenerlo ANTES de las vías.
+            // Rango extendido hasta 751 para no dejar gap entre ticks.
+            if (front > 600 && front < 751) {
+                checks.push({ tlId: 'tlp-E-N', stopLine: 744 });
+                checks.push({ tlId: 'tlp-E-S', stopLine: 744 });
             }
             break;
 
@@ -607,7 +671,17 @@ function checkExtraLight(car, tlId, stopLine) {
     const esTrenO = (tlId === 'rail-tl-S') && car.direction === 'O';
     const colaTrenLlena = esTrenO && isTrainQueueZoneFull(car);
 
-    if (isGreen && !colaLlena && !colaTrenLlena) return false;
+    // Ídem para dir E: si hay tren o peatones en el cebra Este y la zona
+    // entre ese cebra y las vías está llena, detener antes del cebra (x=585).
+    const esTrenE = (tlId === 'rail-tl-N') && car.direction === 'E';
+    const colaTrenLlenaE = esTrenE && isTrainQueueZoneFullE(car);
+
+    // Para peatones del cebra Este (tlp-E-N / tlp-E-S) en dir E:
+    // si la zona entre cebra y vías está llena, también parar antes del cebra.
+    const esPeatonalCebraEste = (tlId === 'tlp-E-N' || tlId === 'tlp-E-S') && car.direction === 'E';
+    const colaCebraEsteLL = esPeatonalCebraEste && isTrainQueueZoneFullE(car);
+
+    if (isGreen && !colaLlena && !colaTrenLlena && !colaTrenLlenaE && !colaCebraEsteLL) return false;
 
     const front = getFrontCoord(car);
     const len   = getVehicleLength(car.type);
