@@ -43,14 +43,25 @@ function desbloquearVehiculosT() {
     }
 }
 function finBloqueoT(circles, index) {
-    // Si cualquier luz del grupo está bloqueada, no tocar nada
-    for (let i = 0; i < circles.length; i++) {
-        if (circles[i].classList.contains("trainblock")) return;
+    if(!prioridad){
+        // Si cualquier luz del grupo está bloqueada, no tocar nada
+        for (let i = 0; i < circles.length; i++) {
+            if (circles[i].classList.contains("trainblock")) return;
+        }
+        for (let i = 0; i < circles.length; i++) {
+            circles[i].classList.remove("on");
+        }
+        circles[index].classList.add("on");
+    }else{
+        for (let i = 0; i < semaforos_interseccion.length; i+=3) {
+            if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
+                semaforos_interseccion[i].classList.remove("on");
+                semaforos_interseccion[i+1].classList.remove("on");
+                semaforos_interseccion[i+2].classList.add("on");
+            }
+        }
     }
-    for (let i = 0; i < circles.length; i++) {
-        circles[i].classList.remove("on");
-    }
-    circles[index].classList.add("on");
+
 }
 
 

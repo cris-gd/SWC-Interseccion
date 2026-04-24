@@ -22,7 +22,7 @@
     <main>
         <aside class="control-panel">
             <!-- ── Volumen de tráfico ── -->
-            <div class="vol-block">
+            <div class="vol-block volumen">
                 <div class="vol-block-title">Volumen de tráfico</div>
 
                 <!-- NORTE -->
@@ -82,7 +82,7 @@
                 </div>
             </div>
             <!-- ── Vehículos de emergencia ── -->
-            <div class="vol-block">
+            <div class="vol-block emergencia">
                 <div class="vol-block-title">Vehículos de emergencia</div>
 
                 <!-- Selección tipo -->
@@ -122,7 +122,7 @@
             </div>
 
             <!-- ── Tren ── -->
-            <div class="vol-block">
+            <div class="vol-block tren">
                 <div class="vol-block-title">Tren</div>
                 <div class="tren-container vol-group">
                     <div class="vol-group-header">Frecuencia (seg):</div>
@@ -130,13 +130,28 @@
                 </div>
             </div>
             <!-- ── Botones de peatones ── -->
-            <div class="vol-block">
+            <div class="vol-block peatones">
                 <div class="vol-block-title">Peatones</div>
                 <div class="peatones-botones-container">
                     <button id="boton-peatones-N" class="boton-peatones">N</button>
                     <button id="boton-peatones-S" class="boton-peatones">S</button>
                     <button id="boton-peatones-E" class="boton-peatones">E</button>
                     <button id="boton-peatones-O" class="boton-peatones">O</button>
+                </div>
+            </div>
+
+            <!-- ── Botones de prioridad ── -->
+            <div class="vol-block prioridad">
+                <div class="vol-block-title">Prioridad</div>
+                <div class="prioridad-botones-container">
+                    <button id="boton-prioridad-ext-N" class="boton-prioridad">Carril exterior N</button>
+                    <button id="boton-prioridad-int-N" class="boton-prioridad">Carril interior N</button>
+                    <button id="boton-prioridad-ext-S" class="boton-prioridad">Carril exterior S</button>
+                    <button id="boton-prioridad-int-S" class="boton-prioridad">Carril interior S</button>
+                    <button id="boton-prioridad-ext-E" class="boton-prioridad">Carril exterior E</button>
+                    <button id="boton-prioridad-int-E" class="boton-prioridad">Carril interior E</button>
+                    <button id="boton-prioridad-ext-O" class="boton-prioridad">Carril exterior O</button>
+                    <button id="boton-prioridad-int-O" class="boton-prioridad">Carril interior O</button>
                 </div>
             </div>
 
@@ -744,6 +759,7 @@
     <script src="js/manejo_coches.js"></script>
     <script src="js/manejo_tren.js"></script>
     <script src="js/manejo_vehiculos_especiales.js"></script>
+    <script src="js/prioridad_trafico.js"></script>
 </body>
 
 </html>

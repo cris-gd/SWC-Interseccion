@@ -114,20 +114,43 @@ main {
     display: grid;
     grid-template-columns: 0.7fr 0.7fr;
     width: 320px;
-    gap: 8px;
+    gap: 4px;
     width: auto;
     min-width: unset;
-    padding: 8px;
+    padding: 4px;
     align-items: start;
+    overflow-y: auto;
 }
 .control-panel > * {
     min-width: 0;
 }
 
-
-.volumen-grid {
-    grid-template-columns: 0.6fr;
+.volumen {
+    grid-column: 1;
+    grid-row: 1 / span 2; /* ocupa altura grande */
 }
+
+.emergencia {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.peatones {
+    grid-column: 2;
+    grid-row: 2; /*justo debajo de emergencia */
+}
+
+.tren {
+    grid-column: 1;
+    grid-row: 3; /* debajo de volumen */
+}
+
+.prioridad {
+    grid-column: 2; /*único que ocupa 2 columnas */
+    grid-row: 3;
+}
+
+
 
 .panel-title {
     font-family: 'Share Tech Mono', monospace;
@@ -152,7 +175,7 @@ main {
 .vol-block {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     position: relative;
 }
  
@@ -311,6 +334,165 @@ select:focus {
     outline: none;
 }
 
+
+
+
+/* ─── BOTONES DE PRIORIDAD ─── */
+.prioridad-botones-container {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.boton-prioridad {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.4rem;
+    font-weight: 600;
+    padding: 5px 2px;
+    border-radius: 6px;
+    border: none;
+    background: linear-gradient(135deg, var(--surface), #f0f2f7);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.boton-prioridad:hover {
+    background: linear-gradient(135deg, var(--accent), #0d5bbf);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(26, 111, 212, 0.3);
+}
+
+.boton-prioridad:active {
+    transform: translateY(1px);
+}
+
+/* ─── BOTÓN ENVIAR VEHÍCULO DE EMERGENCIA ─── */
+#btn-send-emergency {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 8px 6px;
+    margin-top: 4px;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+#btn-send-emergency:hover {
+    background: linear-gradient(135deg, #c82333, #a71d2a);
+    transform: scale(1.02);
+    box-shadow: 0 3px 10px rgba(220, 53, 69, 0.3);
+}
+
+#btn-send-emergency:active {
+    transform: scale(0.98);
+}
+
+/* ─── SELECTORES (tipo, origen, destino) ─── */
+.vol-block select {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vol-block select:hover {
+    border-color: var(--accent);
+    background: #f8f9ff;
+}
+
+.vol-block select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(26, 111, 212, 0.2);
+}
+
+/* ─── INPUT NÚMERO (intervalo tren) ─── */
+#intervalo-tren {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+#intervalo-tren:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(26, 111, 212, 0.2);
+}
+
+#intervalo-tren:hover {
+    border-color: var(--accent);
+}
+
+/* ─── CONTENEDOR TREN ─── */
+.tren-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+}
+
+.tren-container .vol-group-header {
+    margin-bottom: 0;
+    font-size: 0.65rem;
+}
+
+.tren-container input {
+    width: 80px;
+}
+
+/* ─── MEJORAS GENERALES AL PANEL ─── */
+.vol-block {
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 10px;
+    padding: 8px;
+}
+
+.vol-group {
+    transition: all 0.2s ease;
+}
+
+.vol-group:hover {
+    border-color: var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* ─── ETIQUETAS DE VOLUMEN ─── */
+.vol-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--surface);
+    padding: 0 3px;
+    border-radius: 4px;
+    min-width: 20px;
+    text-align: center;
+}
 
 /* ─── INTERSECTION VIEWPORT ─── */
 .intersection-viewport {

@@ -167,6 +167,44 @@ function getGapToCarAhead(carA, carB) {
 }
 
 function shouldStopForCarAhead(car) {
+    for (const other of activeCars) {
+        if (other.id === car.id) continue;
+        if (!other.isEmergency) continue;
+        if (!other.isTurning) continue;
+        
+        // Si la emergencia está girando a la izquierda y este coche está en su trayectoria
+        const emergencyTurn = `${other.from}-${other.to}`;
+        const leftTurns = ['N-O', 'S-E', 'E-S', 'O-N'];
+        if (leftTurns.includes(emergencyTurn)) {
+            // Calcular si el coche está en la zona de conflicto del giro
+            const conflictX = (other.direction === 'S' || other.direction === 'N') ? other.x : other.y;
+            const conflictY = (other.direction === 'E' || other.direction === 'O') ? other.y : other.x;
+            
+            // Simplificado: si la emergencia está cerca del centro de la intersección,
+            // los coches perpendiculares deben detenerse
+            const isNearIntersection = (other.x > 220 && other.x < 460 && other.y > 220 && other.y < 460);
+            if (isNearIntersection) {
+                const stopLine = STOP_LINES[car.direction];
+                if (stopLine !== undefined) {
+                    const front = getFrontCoord(car);
+                    const len = getVehicleLength(car.type);
+                    const pastLine = (car.direction === 'S' || car.direction === 'E')
+                        ? front > stopLine + 10
+                        : front < stopLine - 10;
+                    if (!pastLine) {
+                        if ((car.direction === 'S' || car.direction === 'E') && front < stopLine) {
+                            car.isStopped = true;
+                            return true;
+                        }
+                        if ((car.direction === 'N' || car.direction === 'O') && front > stopLine) {
+                            car.isStopped = true;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
     if (car.isTurning) {
         const TURN_SAFE_DISTANCE = MIN_SAFE_DISTANCE * 2;
         for (const other of activeCars) {
@@ -281,7 +319,6 @@ const QUEUE_ZONE = {
 // Zona entre el paso de cebra Este y las vías del tren, para vehículos
 // en dirección O (avanzan a x decreciente: frente = car.x - len).
 // Cebra Este termina en x≈620, vías empiezan en x≈751.
-// Espacio útil ≈ 131 px → misma capacidad que QUEUE_CAPACITY_PX (138 px).
 const TRAIN_QUEUE_ZONE_O = { axisMin: 621, axisMax: 745 };
 
 // Zona entre el cebra Este y las vías para dirección E (frente = car.x + len, x creciente).
@@ -512,6 +549,12 @@ function createCar(from, to, tlId) {
     carGroup.setAttribute('transform', `translate(${startPos.x}, ${startPos.y}) rotate(${rotation})`);
     vehiclesLayer.appendChild(carGroup);
 
+    // _baseLateral: posición lateral original del carril (eje x para N/S, eje y para E/O).
+    // de modo que siempre podemos calcular correctamente el destino de vuelta al carril.
+    const baseLateral = (startPos.direction === 'S' || startPos.direction === 'N')
+        ? startPos.x
+        : startPos.y;
+
     const car = {
         id: carId,
         element: carGroup,
@@ -526,7 +569,8 @@ function createCar(from, to, tlId) {
         isStopped: false,
         targetDirection: to,
         hasTurned: false,
-        wasStoppedByExtraLight: false
+        wasStoppedByExtraLight: false,
+        _baseLateral: baseLateral
     };
 
     activeCars.push(car);
@@ -908,21 +952,21 @@ function _shouldStopForcedByEmergency(car) {
     const front = getFrontCoord(car);
     const len   = getVehicleLength(car.type);
 
-    // Ya cruzó la stop-line → dejar que despeje la intersección
+    // Ya cruzó la stop-line, dejar que despeje la intersección
     const pastLine =
         (car.direction === 'S' || car.direction === 'E')
             ? front > stopLine + 10
             : front < stopLine - 10;
     if (pastLine) return false;
 
-    // Aún no ha llegado a la stop-line → parar
+    // Aún no ha llegado a la stop-line, parar
     const beforeLine =
         (car.direction === 'S' || car.direction === 'E')
             ? front < stopLine
             : front > stopLine;
     if (beforeLine) { car.isStopped = true; return true; }
 
-    // Exactamente sobre la línea → anclar
+    // Exactamente sobre la línea, anclar
     switch (car.direction) {
         case 'S': car.y = stopLine - len; break;
         case 'N': car.y = stopLine + len; break;
@@ -1051,6 +1095,14 @@ function moveCar(car) {
                 delete car.turnStartY;
                 delete car.turnData;
                 delete car.startRotation;
+                // La referencia lateral cambia porque el coche ahora circula en otra dirección
+                if (car.direction === 'S' || car.direction === 'N') {
+                    // Ahora se mueve verticalmente → lateral = coordenada X
+                    car._baseLateral = car.x;
+                } else {
+                    // Ahora se mueve horizontalmente → lateral = coordenada Y
+                    car._baseLateral = car.y;
+                }
             } else {
                 car.turnProgress = newT;
             }
@@ -1150,7 +1202,10 @@ function startGenerationForRoute(routeKey, volume) {
     if (!interval) return;
 
     generationIntervals[routeKey] = setInterval(() => {
-        if (!isSpawnBlocked(route.from, route.to)) {
+        // No generar si hay un vehículo de emergencia activo en este acceso
+        const emergencyOnRoute = typeof activeEmergencyRoutes !== 'undefined' &&
+            activeEmergencyRoutes.some(r => r.from === route.from);
+        if (!emergencyOnRoute && !isSpawnBlocked(route.from, route.to)) {
             createCar(route.from, route.to, route.tlId);
         }
     }, interval);

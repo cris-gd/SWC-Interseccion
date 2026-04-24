@@ -4,7 +4,7 @@
 // =====================================================
 
 let emergencyVehicles = [];
-let activeEmergencyRoutes = [];  // [{ from, to, carId }]
+let activeEmergencyRoutes = [];  // [{ from, to, carId, blockedDirections }]
 
 const EMERGENCY_TYPES = {
     ambulance: { bodyColor: '#ffffff', accentColor: '#cc0000', label: 'A', lightColor: '#cc0000' },
@@ -13,8 +13,89 @@ const EMERGENCY_TYPES = {
 };
 
 // =====================================================
-// DISEÑO SVG (tres aspectos distintos)
+// CARRILES NORMALES — referencia lateral fija por dirección de spawn
 // =====================================================
+
+const YIELD_OFFSET = 14;
+const YIELD_LERP = 0.08;
+
+function yieldSign(direction) {
+    return { S: -1, N: +1, E: -1, O: +1 }[direction] ?? 0;
+}
+
+/**
+ * Devuelve la dirección de avance que usa la emergencia en cada tramo de su ruta.
+ * Para una ruta N→O: primero avanza S (hasta el giro), luego E.
+ * Los coches que circulan en dirección E (Oeste→Este) deben apartarse cuando la
+ * emergencia está en su segundo tramo.
+ */
+function getEmergencyFlowDirections(route) {
+    const { from, to } = route;
+    if (from === to) return [];
+    if (from === 'N' && to === 'S') return ['S'];
+    if (from === 'S' && to === 'N') return ['N'];
+    if (from === 'E' && to === 'O') return ['O'];
+    if (from === 'O' && to === 'E') return ['E'];
+    // Giros: primero avanza recto, luego gira
+    const straightDir = { N: 'S', S: 'N', E: 'O', O: 'E' }[from];
+    const turnDir = to;
+    return [straightDir, turnDir];
+}
+
+/**
+ * True si `car` circula por el mismo carril físico que la emergencia.
+ * Incluye coches que van en la misma dirección que la emergencia en
+ * cualquier tramo de su ruta.
+ */
+function isSameLaneAsEmergency(car, route) {
+    const startPos = getStartPosition(route.from, route.to);
+    if (!startPos) return false;
+    
+    const emergencyDirs = getEmergencyFlowDirections(route);
+    if (!emergencyDirs.includes(car.direction)) return false;
+
+    const LANE_TOL = 22;
+    const lateral = car._baseLateral !== undefined
+        ? car._baseLateral
+        : (car.direction === 'S' || car.direction === 'N' ? car.x : car.y);
+
+    // Referencia lateral: para la dirección inicial de la emergencia
+    const refLateral = (startPos.direction === 'S' || startPos.direction === 'N')
+        ? startPos.x
+        : startPos.y;
+
+    return Math.abs(lateral - refLateral) < LANE_TOL;
+}
+
+function getTargetLateral(car) {
+    if (car.isEmergency) return null;
+    if (car._baseLateral === undefined) return null;
+
+    const hasEmergency = activeEmergencyRoutes.some(r => isSameLaneAsEmergency(car, r));
+    return hasEmergency
+        ? car._baseLateral + yieldSign(car.direction) * YIELD_OFFSET
+        : car._baseLateral;
+}
+
+function smoothLateral(car, target) {
+    if (car.direction === 'S' || car.direction === 'N') {
+        if (Math.abs(car.x - target) < 0.3) { car.x = target; return; }
+        car.x += (target - car.x) * YIELD_LERP;
+    } else {
+        if (Math.abs(car.y - target) < 0.3) { car.y = target; return; }
+        car.y += (target - car.y) * YIELD_LERP;
+    }
+}
+
+function applyYieldDisplacements() {
+    for (const car of activeCars) {
+        if (car.isEmergency) continue;
+        if (car.isTurning) continue;
+        const target = getTargetLateral(car);
+        if (target === null) continue;
+        smoothLateral(car, target);
+    }
+}
 
 function buildEmergencyElement(type, carId) {
     const cfg = EMERGENCY_TYPES[type];
@@ -23,27 +104,23 @@ function buildEmergencyElement(type, carId) {
     g.setAttribute('id', carId);
     g.setAttribute('class', 'car emergency');
 
-    // Cuerpo
     const body = document.createElementNS(ns, 'rect');
     body.setAttribute('width', '20');  body.setAttribute('height', '12');
     body.setAttribute('rx', '3');
     body.setAttribute('fill', cfg.bodyColor);
     body.setAttribute('stroke', '#111'); body.setAttribute('stroke-width', '1');
 
-    // Franja identificativa
     const stripe = document.createElementNS(ns, 'rect');
     stripe.setAttribute('x', '4');    stripe.setAttribute('y', '4');
     stripe.setAttribute('width', '9'); stripe.setAttribute('height', '4');
     stripe.setAttribute('fill', cfg.accentColor); stripe.setAttribute('opacity', '0.9');
 
-    // Letra
     const text = document.createElementNS(ns, 'text');
     text.setAttribute('x', '5');  text.setAttribute('y', '9');
     text.setAttribute('font-size', '7'); text.setAttribute('font-weight', 'bold');
     text.setAttribute('fill', cfg.bodyColor === '#ffffff' ? '#cc0000' : '#fff');
     text.textContent = cfg.label;
 
-    // Luz de sirena (parpadea por CSS)
     const siren = document.createElementNS(ns, 'circle');
     siren.setAttribute('cx', '14'); siren.setAttribute('cy', '6');
     siren.setAttribute('r', '3');
@@ -56,7 +133,6 @@ function buildEmergencyElement(type, carId) {
     return g;
 }
 
-// Inyectar CSS de parpadeo una sola vez
 (function injectSirenCSS() {
     if (document.getElementById('emg-siren-style')) return;
     const s = document.createElement('style');
@@ -73,7 +149,6 @@ function buildEmergencyElement(type, carId) {
 // =====================================================
 
 function createEmergencyVehicle(from, to, type) {
-    // getStartPosition, rotationForDirection definidas en manejo_coches.js
     const startPos = getStartPosition(from, to);
     if (!startPos) return;
 
@@ -89,7 +164,7 @@ function createEmergencyVehicle(from, to, type) {
     const car = {
         id:              carId,
         element:         carGroup,
-        type:            'car',        // usa dimensiones de coche para distancias/giros
+        type:            'car',
         subtype:         type,
         from:            from,
         to:              to,
@@ -100,21 +175,22 @@ function createEmergencyVehicle(from, to, type) {
         y:               startPos.y,
         active:          true,
         isStopped:       false,
-        isEmergency:     true,         // flag leído por manejo_coches.js → moveCar lo omite
+        isEmergency:     true,
         hasTurned:       false,
         wasStoppedByExtraLight: false,
-        emergencySpeed:  CAR_SPEED * 1.8
+        emergencySpeed:  CAR_SPEED * 1.8,
+        _baseLateral: (startPos.direction === 'S' || startPos.direction === 'N') ? startPos.x : startPos.y
     };
 
     emergencyVehicles.push(car);
-    activeCars.push(car);              // integrado en el array central de manejo_coches.js
+    activeCars.push(car);
 
     activateEmergencyRoute(from, to, carId);
 }
 
 // =====================================================
-// PRIORIDAD — se gestiona con el flag emergencyForced
-// en los coches normales; el ciclo de semáforos NO se toca
+// PRIORIDAD — los coches perpendiculares se comportan como si tuvieran SEMÁFORO ROJO
+// (pueden avanzar hasta la línea de stop, pero no cruzarla)
 // =====================================================
 
 function directionForFrom(from) {
@@ -122,7 +198,18 @@ function directionForFrom(from) {
 }
 
 function activateEmergencyRoute(from, to, carId) {
-    activeEmergencyRoutes.push({ from, to, carId });
+    // Guardamos también las direcciones que bloquea esta emergencia
+    const blockedDirs = [];
+    const allDirs = ['N', 'S', 'E', 'O'];
+    const emergencyDir = directionForFrom(from);
+    
+    for (const dir of allDirs) {
+        if (dir !== emergencyDir) {
+            blockedDirs.push(dir);
+        }
+    }
+    
+    activeEmergencyRoutes.push({ from, to, carId, blockedDirs });
     refreshEmergencyFlags();
 }
 
@@ -132,41 +219,71 @@ function releaseEmergencyRoute(carId) {
 }
 
 function refreshEmergencyFlags() {
-    // Vías que tienen paso libre (hay un emergencia viniendo desde allí)
-    const freeDirections = new Set(
-        activeEmergencyRoutes.map(r => directionForFrom(r.from))
-    );
+    if (activeEmergencyRoutes.length === 0) {
+        for (const car of activeCars) {
+            if (car.isEmergency) continue;
+            if (car.emergencyForced) {
+                car.emergencyForced = false;
+                car.isStopped = false;
+            }
+        }
+        return;
+    }
+
+    // Recopilar todas las direcciones bloqueadas
+    const allBlockedDirs = new Set();
+    for (const route of activeEmergencyRoutes) {
+        for (const dir of route.blockedDirs) {
+            allBlockedDirs.add(dir);
+        }
+    }
 
     for (const car of activeCars) {
         if (car.isEmergency) continue;
-
-        if (activeEmergencyRoutes.length === 0) {
-            // Sin emergencias: quitar todos los flags y desbloquear
-            if (car.emergencyForced) {
-                car.emergencyForced = false;
-                car.isStopped       = false;
-            }
-        } else if (freeDirections.has(car.direction)) {
-            // Misma vía que el emergencia: libre
-            car.emergencyForced = false;
-            car.isStopped       = false;
-        } else {
-            // Vía perpendicular: parar
+        
+        if (allBlockedDirs.has(car.direction)) {
+            // Esta dirección debe parar (como si tuviera semáforo rojo)
             car.emergencyForced = true;
+        } else {
+            car.emergencyForced = false;
+            car.isStopped = false;
         }
     }
 }
 
 // =====================================================
 // MOVIMIENTO DE EMERGENCIA
-// Usa la misma lógica de giro Bézier que manejo_coches.js
-// pero omite la comprobación de semáforo
 // =====================================================
 
 function moveEmergencyVehicle(car) {
     if (!car.active) return;
 
-    // ── Iniciar giro si corresponde ──────────────────────────────────────────
+    // Semáforos del tren
+    if (!car.isTurning) {
+        const front = getFrontCoord(car);
+        if (car.direction === 'E' && front > 744 && front < 800) {
+            const trainGreen = getTrafficLightState('rail-tl-N');
+            if (!trainGreen) {
+                const len = getVehicleLength(car.type);
+                if (front >= 744) car.x = 744 - len;
+                car.isStopped = true;
+                updateCarTransform(car);
+                return;
+            }
+        }
+        if (car.direction === 'O' && front < 800 && front > 744) {
+            const trainGreen = getTrafficLightState('rail-tl-S');
+            if (!trainGreen) {
+                const len = getVehicleLength(car.type);
+                if (front <= 802) car.x = 802 + len;
+                car.isStopped = true;
+                updateCarTransform(car);
+                return;
+            }
+        }
+        if (car.isStopped) car.isStopped = false;
+    }
+    
     if (!car.hasTurned && needsToTurn(car) && !car.isTurning) {
         if (shouldStartTurn(car)) {
             const td = getTurnPoint(car);
@@ -181,7 +298,6 @@ function moveEmergencyVehicle(car) {
         }
     }
 
-    // ── Ejecutar giro Bézier ─────────────────────────────────────────────────
     if (car.isTurning && car.turnData) {
         const t  = car.turnProgress;
         const td = car.turnData;
@@ -202,14 +318,21 @@ function moveEmergencyVehicle(car) {
             car.direction = car.targetDirection;
             car.from = car.to;
             car.hasTurned = true; car.isTurning = false;
-            delete car.turnProgress; delete car.turnStartX; delete car.turnStartY;
-            delete car.turnData;    delete car.startRotation;
+            delete car.turnProgress; 
+            delete car.turnStartX; 
+            delete car.turnStartY;
+            delete car.turnData;    
+            delete car.startRotation;
+            if (car.direction === 'S' || car.direction === 'N') {
+                car._baseLateral = car.x;
+            } else {
+                car._baseLateral = car.y;
+            }
         } else {
             car.turnProgress = newT;
         }
 
     } else if (!car.isTurning) {
-        // ── Avance recto ─────────────────────────────────────────────────────
         const sp = car.emergencySpeed;
         switch (car.direction) {
             case 'S': car.y += sp; break;
@@ -219,10 +342,8 @@ function moveEmergencyVehicle(car) {
         }
     }
 
-    // Actualizar transform SVG (función de manejo_coches.js)
     updateCarTransform(car);
 
-    // ── Salida de escena ─────────────────────────────────────────────────────
     if (car.x < -100 || car.x > 1000 || car.y < -40 || car.y > 750) {
         car.active = false;
         if (car.element) car.element.remove();
@@ -235,21 +356,12 @@ function moveEmergencyVehicle(car) {
     }
 }
 
-// =====================================================
-// PUNTO DE ENTRADA llamado desde animate() en manejo_coches.js
-// =====================================================
-
 function updateAllEmergency() {
     for (let i = emergencyVehicles.length - 1; i >= 0; i--) {
         moveEmergencyVehicle(emergencyVehicles[i]);
     }
+    applyYieldDisplacements();
 }
-
-// =====================================================
-// BOTÓN
-// El script se carga con defer o al final del body,
-// por lo que el DOM ya está listo aquí.
-// =====================================================
 
 document.getElementById('btn-send-emergency').addEventListener('click', () => {
     const type = document.getElementById('emg-type').value;

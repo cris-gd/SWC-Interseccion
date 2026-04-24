@@ -29,6 +29,11 @@ const colores_EN = semaforo_EN.getElementsByTagName("circle");
 const semaforos_interseccion = document.querySelectorAll("circle[id^='tl-']");
 //console.log(semaforos_interseccion);
 let ciclo_semaforos = 0;
+let inicio_fase;
+let prioridad = false;
+
+let timerActual = null;
+let duracionFase = 0;
 
 function apagarTodas() {
     for (let i = 0; i < semaforos_interseccion.length; i++) {
@@ -45,9 +50,12 @@ function todoAlRojo() {
         const ambar = semaforos_interseccion[i+1];
         const verde = semaforos_interseccion[i+2];
 
-        ambar.classList.remove("on");
-        verde.classList.remove("on");
-        rojo.classList.add("on");
+        if (!rojo.classList.contains("prio")){
+            ambar.classList.remove("on");
+            verde.classList.remove("on");
+            rojo.classList.add("on");
+        }
+
     }
 }
 
@@ -61,101 +69,190 @@ function setLight(circles, index) {
     }
     circles[index].classList.add("on");
 }
-
-function t0_10(){
-    ciclo_semaforos=1;
-    apagarTodas();//estado inicial
-    todoAlRojo();
-
+function ciclo1(){
     setLight(colores_OE, 2);
     setLight(colores_OS, 2);
     setLight(colores_EO, 2);
     setLight(colores_EN, 2);
-    setTimeout(t10_15, 10000);
 }
-function t10_15(){
-    ciclo_semaforos=2;
+function t0_10(){
+    if(!prioridad){
+        ciclo_semaforos=1;
+        inicio_fase=Date.now();
+        ciclo1();
+        duracionFase = 10000;
+        timerActual = setTimeout(t10_15, duracionFase);
+    }
+
+}
+function ciclo2(){
     setLight(colores_OE, 1);
     setLight(colores_OS, 1);
     setLight(colores_EO, 1);
     setLight(colores_EN, 1);
-    setTimeout(t15_17, 5000);
 }
-function t15_17(){
-    ciclo_semaforos=3;
+function t10_15(){
+    if(!prioridad){
+        ciclo_semaforos=2;
+        inicio_fase=Date.now();
+        ciclo2();
+        duracionFase = 5000;
+        timerActual = setTimeout(t15_17, duracionFase);
+    }
+
+}
+function ciclo3(){
     apagarTodas();
     todoAlRojo();
-
-    setTimeout(t17_27, 2000);
 }
-function t17_27(){
-    ciclo_semaforos=4;
+function t15_17(){
+    if(!prioridad){
+        ciclo_semaforos=3;
+        inicio_fase=Date.now();
+        ciclo3();
+        duracionFase = 2000;
+        timerActual = setTimeout(t17_27, duracionFase);
+    }
+
+}
+function ciclo4(){
     setLight(colores_ON, 2);
     setLight(colores_NO, 2);
     setLight(colores_ES, 2);
     setLight(colores_SE, 2);
-    setTimeout(t27_32, 10000);
 }
-function t27_32(){
-    ciclo_semaforos=5;
+function t17_27(){
+    if(!prioridad){
+        ciclo_semaforos=4;
+        inicio_fase=Date.now();
+        ciclo4();
+        duracionFase = 10000;
+        timerActual = setTimeout(t27_32, duracionFase);
+    }
+
+}
+function ciclo5(){
     setLight(colores_ON, 1);
     setLight(colores_NO, 1);
     setLight(colores_ES, 1);
     setLight(colores_SE, 1);
-    setTimeout(t32_34, 5000);
 }
-function t32_34(){
-    ciclo_semaforos=6;
+function t27_32(){
+    if(!prioridad){
+        ciclo_semaforos=5;
+        inicio_fase=Date.now();
+        ciclo5();
+        duracionFase = 5000;
+        timerActual = setTimeout(t32_34, duracionFase);     
+    }
+
+}
+function ciclo6(){
     apagarTodas();
     todoAlRojo();
-
-    setTimeout(t34_44, 2000);
 }
-function t34_44(){
-    ciclo_semaforos=7;
+function t32_34(){
+    if(!prioridad){
+        ciclo_semaforos=6;
+        inicio_fase=Date.now();
+        ciclo6();
+        duracionFase = 2000;
+        timerActual = setTimeout(t34_44, duracionFase);
+    }
+
+}
+function ciclo7(){
     setLight(colores_NS, 2);
     setLight(colores_NO, 2);
     setLight(colores_SN, 2);
     setLight(colores_SE, 2);
-    setTimeout(t44_49, 10000);
 }
-function t44_49(){
-    ciclo_semaforos=8;
+function t34_44(){
+    if(!prioridad){
+        ciclo_semaforos=7;
+        inicio_fase=Date.now();
+        ciclo7();
+        duracionFase = 10000;
+        timerActual = setTimeout(t44_49, duracionFase);
+    }
+
+}
+function ciclo8(){
     setLight(colores_NS, 1);
     setLight(colores_NO, 1);
     setLight(colores_SN, 1);
     setLight(colores_SE, 1);
-    setTimeout(t49_51, 5000);
 }
-function t49_51(){
-    ciclo_semaforos=9;
+function t44_49(){
+    if(!prioridad){
+        ciclo_semaforos=8;
+        inicio_fase=Date.now();
+        ciclo8();
+        duracionFase = 5000;
+        timerActual = setTimeout(t49_51, duracionFase);
+    }
+
+}
+function ciclo9(){
     apagarTodas();
     todoAlRojo();
-
-    setTimeout(t51_61, 2000);
 }
-function t51_61(){
-    ciclo_semaforos=10;
+function t49_51(){
+    if(!prioridad){
+        ciclo_semaforos=9;
+        inicio_fase=Date.now();
+        ciclo9();
+        duracionFase = 2000;
+        timerActual = setTimeout(t51_61, duracionFase);
+    }
+
+}
+function ciclo10(){
     setLight(colores_SO, 2);
     setLight(colores_NE, 2);
     setLight(colores_OS, 2);
     setLight(colores_EN, 2);
-    setTimeout(t61_66, 10000);
 }
-function t61_66(){
-    ciclo_semaforos=11;
+function t51_61(){
+    if(!prioridad){
+        ciclo_semaforos=10;
+        inicio_fase=Date.now();
+        ciclo10();
+        duracionFase = 10000;
+        timerActual = setTimeout(t61_66, duracionFase);
+    }
+
+}
+function ciclo11(){
     setLight(colores_SO, 1);
     setLight(colores_NE, 1);
     setLight(colores_OS, 1);
     setLight(colores_EN, 1);
-    setTimeout(t66_68, 5000);
 }
-function t66_68(){
-    ciclo_semaforos=12;
+function t61_66(){
+    if(!prioridad){
+        ciclo_semaforos=11;
+        inicio_fase=Date.now();
+        ciclo11();
+        duracionFase = 5000;
+        timerActual = setTimeout(t66_68, duracionFase);      
+    }
+
+}
+function ciclo12(){
     apagarTodas();
     todoAlRojo();
-
-    setTimeout(t0_10, 2000);
 }
+function t66_68(){
+    if(!prioridad){
+        ciclo_semaforos=12;
+        inicio_fase=Date.now();
+        ciclo12();
+        duracionFase = 2000;
+        timerActual = setTimeout(t0_10, duracionFase);
+    }
 
+}
+apagarTodas();//estado inicial
+todoAlRojo();
 t0_10(); // iniciar ciclo
