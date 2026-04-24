@@ -43,28 +43,71 @@ function getEmergencyFlowDirections(route) {
 }
 
 /**
- * True si `car` circula por el mismo carril físico que la emergencia.
- * Incluye coches que van en la misma dirección que la emergencia en
- * cualquier tramo de su ruta.
+ * True si `car` debe ceder el paso lateralmente a la emergencia `route`.
+ *
+ * Hay dos situaciones donde un coche debe apartarse:
+ *
+ * A) TRAMO DE ORIGEN (antes de la intersección):
+ *    El coche está en el mismo carril físico que la emergencia en su tramo
+ *    inicial (misma dirección de avance, misma lateral) y la emergencia aún
+ *    no ha girado. El coche solo se aparta si la emergencia está DETRÁS de él
+ *    o muy cerca (a menos de 120 px por detrás), para no desplazar coches
+ *    que ya están lejos por delante.
+ *
+ * B) DENTRO DE LA INTERSECCIÓN / TRAMO DE SALIDA:
+ *    El coche ya superó la stop-line y circula en la misma dirección que
+ *    algún tramo de la ruta de la emergencia (incluido el tramo de giro).
  */
 function isSameLaneAsEmergency(car, route) {
     const startPos = getStartPosition(route.from, route.to);
     if (!startPos) return false;
-    
+
+    const LANE_TOL = 22;
+    const stopLine = typeof STOP_LINES !== 'undefined' ? STOP_LINES[car.direction] : undefined;
+    if (stopLine === undefined) return false;
+
     const emergencyDirs = getEmergencyFlowDirections(route);
     if (!emergencyDirs.includes(car.direction)) return false;
 
-    const LANE_TOL = 22;
     const lateral = car._baseLateral !== undefined
         ? car._baseLateral
         : (car.direction === 'S' || car.direction === 'N' ? car.x : car.y);
 
-    // Referencia lateral: para la dirección inicial de la emergencia
     const refLateral = (startPos.direction === 'S' || startPos.direction === 'N')
         ? startPos.x
         : startPos.y;
 
-    return Math.abs(lateral - refLateral) < LANE_TOL;
+    if (Math.abs(lateral - refLateral) >= LANE_TOL) return false;
+
+    const front = getFrontCoord(car);
+    const pastStopLine =
+        (car.direction === 'S' || car.direction === 'E')
+            ? front > stopLine + 10
+            : front < stopLine - 10;
+
+    // CASO B: ya está dentro/después de la intersección → siempre apartarse
+    if (pastStopLine) return true;
+
+    // CASO A: fuera de la intersección, en el tramo inicial de la emergencia.
+    // Solo aplica si la emergencia todavía no ha girado (su dirección actual
+    // coincide con la dirección de avance del coche).
+    const emgCar = emergencyVehicles.find(e => e.id === route.carId);
+    if (!emgCar || emgCar.hasTurned) return false;
+    if (emgCar.direction !== car.direction) return false;
+
+    // La emergencia está detrás del coche o muy cerca: apartarse.
+    // Usamos un margen de 120 px para cubrir la zona de aproximación.
+    const emgFront = getFrontCoord(emgCar);
+    const carRear  = getRearCoord(car);
+    const APPROACH_MARGIN = 120;
+
+    switch (car.direction) {
+        case 'S': return emgFront < carRear + APPROACH_MARGIN;
+        case 'N': return emgFront > carRear - APPROACH_MARGIN;
+        case 'E': return emgFront < carRear + APPROACH_MARGIN;
+        case 'O': return emgFront > carRear - APPROACH_MARGIN;
+    }
+    return false;
 }
 
 function getTargetLateral(car) {

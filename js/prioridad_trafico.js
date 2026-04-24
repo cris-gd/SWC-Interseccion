@@ -12,6 +12,81 @@ const botones_prioridad = document.getElementsByClassName("boton-prioridad");
 let inicio_prioridad;
 let resto;
 
+// =====================================================
+// CONFLICTOS DE CARRIL: rutas cuyo destino comparte carril físico
+// con la ruta priorizada. Hay que esperar a que esos coches despejen
+// antes de dar el verde de prioridad.
+// =====================================================
+
+// Para cada combinación (dirección, esExt), lista de rutas {from,to}
+// cuyo DESTINO ocupa el mismo carril que la ruta priorizada.
+const CONFLICTOS_PRIORIDAD = {
+    'N-ext': [{ from:'E', to:'O' }, { from:'S', to:'O' }],  // prio N→O/S → carril O y carril S
+    'N-int': [{ from:'S', to:'E' }, { from:'O', to:'E' }],  // prio N→E  → carril E
+    'S-ext': [{ from:'O', to:'E' }, { from:'N', to:'E' }],  // prio S→E/N → carril E y carril N
+    'S-int': [{ from:'E', to:'O' }, { from:'N', to:'O' }],  // prio S→O  → carril O
+    'E-ext': [{ from:'N', to:'O' }, { from:'S', to:'O' }],  // prio E→O/N → carril O y carril N  
+    'E-int': [{ from:'N', to:'S' }, { from:'O', to:'S' }],  // prio E→S  → carril S
+    'O-ext': [{ from:'N', to:'S' }, { from:'S', to:'E' }],  // prio O→S/E → carril S y carril E
+    'O-int': [{ from:'E', to:'N' }, { from:'S', to:'N' }],  // prio O→N  → carril N
+};
+
+/**
+ * Devuelve true si hay algún coche activo cuya ruta (from→to) coincida
+ * con alguna de las rutas conflictivas para la prioridad pedida,
+ * Y ese coche ya cruzó la stop-line (está en la intersección o más allá),
+ * es decir, aún puede ocupar el carril destino.
+ */
+function hayConflictoEnCarril(laneDirection, laneIsExt) {
+    const key = laneDirection + (laneIsExt ? '-ext' : '-int');
+    const conflictos = CONFLICTOS_PRIORIDAD[key];
+    if (!conflictos || typeof activeCars === 'undefined') return false;
+
+    const stopLines = { S: 230, N: 450, E: 230, O: 450 };
+
+    for (const car of activeCars) {
+        if (car.isEmergency) continue;
+        // ¿Coincide la ruta del coche con algún conflicto?
+        const esConflicto = conflictos.some(c => c.from === car.from && c.to === car.to);
+        if (!esConflicto) continue;
+
+        // ¿Ya cruzó la stop-line? (está en tránsito por la intersección)
+        const stopLine = stopLines[car.direction];
+        if (stopLine === undefined) continue;
+
+        const front = (car.direction === 'S' || car.direction === 'E')
+            ? (car.direction === 'S' ? car.y + getVehicleLength(car.type) : car.x + getVehicleLength(car.type))
+            : (car.direction === 'N' ? car.y - getVehicleLength(car.type) : car.x - getVehicleLength(car.type));
+
+        const pastLine = (car.direction === 'S' || car.direction === 'E')
+            ? front > stopLine + 10
+            : front < stopLine - 10;
+
+        if (pastLine) return true;
+    }
+    return false;
+}
+
+/**
+ * Espera hasta que no haya coches conflictivos en tránsito y luego
+ * ejecuta el callback que activa el verde de prioridad.
+ * Reintenta cada 150ms con un timeout máximo de 4s para no bloquear indefinidamente.
+ */
+function esperarYDarVerde(laneDirection, laneIsExt, callback) {
+    const MAX_WAIT = 4000;
+    const POLL_MS  = 150;
+    const start    = Date.now();
+
+    function poll() {
+        if (!hayConflictoEnCarril(laneDirection, laneIsExt) || (Date.now() - start) >= MAX_WAIT) {
+            callback();
+        } else {
+            setTimeout(poll, POLL_MS);
+        }
+    }
+    poll();
+}
+
 function darPrioridad (laneDirection, laneIsExt){
     if (prioridad) return;
     prioridad = true;
@@ -31,17 +106,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-N-O-") || semaforos_interseccion[i].id.includes("-N-S-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -67,17 +148,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-N-E-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -106,17 +193,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-S-E-") || semaforos_interseccion[i].id.includes("-S-N-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -142,17 +235,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-S-O-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -181,17 +280,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-E-N-") || semaforos_interseccion[i].id.includes("-E-O-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -217,17 +322,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-E-S-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -256,17 +367,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-O-S-") || semaforos_interseccion[i].id.includes("-O-E-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -292,17 +409,23 @@ function darPrioridad (laneDirection, laneIsExt){
 
                     if (semaforos_interseccion[i].id.includes("-O-N-")) {
 
-                        setTimeout(() => {
-                            rojo.classList.add("prio");
-                            ambar.classList.add("prio");
-                            verde.classList.add("prio");
-                            
-                            if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
-                                ambar.classList.remove("on");
-                                verde.classList.add("on");
-                                rojo.classList.remove("on");
-                            }    
-                        }, 1000);
+                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
+                        rojo.classList.add("prio");
+                        ambar.classList.add("prio");
+                        verde.classList.add("prio");
+                        // Capturar referencias para el closure
+                        (function(r, a, v) {
+                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
+                            setTimeout(() => {
+                                esperarYDarVerde(laneDirection, laneIsExt, () => {
+                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
+                                        a.classList.remove("on");
+                                        v.classList.add("on");
+                                        r.classList.remove("on");
+                                    }
+                                });
+                            }, 1000);
+                        })(rojo, ambar, verde);
 
                     }else{
 
@@ -473,6 +596,3 @@ boton_ext_O.addEventListener("mousedown", () => darPrioridad("O", true));
 boton_int_O.addEventListener("mousedown", () => darPrioridad("O", false));
 
 document.addEventListener("pointerup", () => finPrioridad());
-
-
-
