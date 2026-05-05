@@ -75,6 +75,9 @@ function getVehicleDimensions(type) {
 
 const AMBER_DURATION_MS = 5000;
 const AMBER_RED_MARGIN_MS = 1000;
+const AMBER_RED_MARGIN_MS_2 = 3000;
+
+const AMBER_DURANTION_PRIO = 2000;
 
 function getTrafficLightState(tlId) {
     const tlGroup = document.getElementById(tlId)?.closest('g');
@@ -92,7 +95,15 @@ function getTrafficLightState(tlId) {
             amberOnTimestamps[tlId] = Date.now();
         }
         const elapsed = Date.now() - amberOnTimestamps[tlId];
-        if (elapsed >= AMBER_DURATION_MS - AMBER_RED_MARGIN_MS) return false;
+        if(tlId.startsWith("tl-")){
+            if (prioridad){
+                if (elapsed >= AMBER_DURANTION_PRIO - AMBER_RED_MARGIN_MS_2) return false;
+            }else{
+                if (elapsed >= AMBER_DURATION_MS - AMBER_RED_MARGIN_MS_2) return false;
+            }
+        }else{
+            if (elapsed >= AMBER_DURATION_MS - AMBER_RED_MARGIN_MS) return false;
+        }
         return true;
     }
 
@@ -570,7 +581,8 @@ function createCar(from, to, tlId) {
         targetDirection: to,
         hasTurned: false,
         wasStoppedByExtraLight: false,
-        _baseLateral: baseLateral
+        _baseLateral: baseLateral,
+        returnDelay: 0
     };
 
     activeCars.push(car);

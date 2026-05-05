@@ -121,7 +121,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -135,7 +135,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -163,7 +163,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -177,7 +177,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -208,7 +208,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -222,7 +222,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -250,7 +250,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -264,7 +264,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -295,7 +295,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -309,7 +309,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -337,7 +337,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -351,7 +351,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -382,7 +382,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -396,7 +396,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -424,7 +424,7 @@ function darPrioridad (laneDirection, laneIsExt){
                                         r.classList.remove("on");
                                     }
                                 });
-                            }, 1000);
+                            }, 2000);
                         })(rojo, ambar, verde);
 
                     }else{
@@ -438,7 +438,7 @@ function darPrioridad (laneDirection, laneIsExt){
                             ambar.classList.remove("on");
                             verde.classList.remove("on");
                             rojo.classList.add("on");
-                        }, 1000);
+                        }, 2000);
 
                     }
 
@@ -450,9 +450,90 @@ function darPrioridad (laneDirection, laneIsExt){
 
 function finPrioridad (){
     if(prioridad){
-        if((Date.now() - inicio_prioridad)<1000){
+        if((Date.now() - inicio_prioridad)<2000){
             setTimeout(() => {
 
+            for (let i = 0; i < semaforos_interseccion.length; i+=3) {
+                if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
+                    semaforos_interseccion[i+2].classList.remove("on");
+                    semaforos_interseccion[i+1].classList.add("on");
+                }
+            }
+            switch (ciclo_semaforos){
+                case 1:
+                    if(colores_EO[0].classList.contains("prio") && !colores_EO[0].classList.contains("bloqueado") && !colores_EO[0].classList.contains("trainblock")){
+                        colores_EO[1].classList.remove("on");
+                        colores_EO[2].classList.add("on");
+                    }
+                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
+                        colores_EN[1].classList.remove("on");
+                        colores_EN[2].classList.add("on");
+                    }
+                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
+                        colores_OS[1].classList.remove("on");
+                        colores_OS[2].classList.add("on");
+                    }
+                    if(colores_OE[0].classList.contains("prio") && !colores_OE[0].classList.contains("bloqueado") && !colores_OE[0].classList.contains("trainblock")){
+                        colores_OE[1].classList.remove("on");
+                        colores_OE[2].classList.add("on");
+                    }
+                    break;
+                case 4:
+                    if(colores_ON[0].classList.contains("prio") && !colores_ON[0].classList.contains("bloqueado") && !colores_ON[0].classList.contains("trainblock")){
+                        colores_ON[1].classList.remove("on");
+                        colores_ON[2].classList.add("on");
+                    }
+                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
+                        colores_NO[1].classList.remove("on");
+                        colores_NO[2].classList.add("on");
+                    }
+                    if(colores_ES[0].classList.contains("prio") && !colores_ES[0].classList.contains("bloqueado") && !colores_ES[0].classList.contains("trainblock")){
+                        colores_ES[1].classList.remove("on");
+                        colores_ES[2].classList.add("on");
+                    }
+                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
+                        colores_SE[1].classList.remove("on");
+                        colores_SE[2].classList.add("on");
+                    }
+                    break;
+                case 7:
+                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
+                        colores_NO[1].classList.remove("on");
+                        colores_NO[2].classList.add("on");
+                    }
+                    if(colores_SN[0].classList.contains("prio") && !colores_SN[0].classList.contains("bloqueado") && !colores_SN[0].classList.contains("trainblock")){
+                        colores_SN[1].classList.remove("on");
+                        colores_SN[2].classList.add("on");
+                    }
+                    if(colores_NS[0].classList.contains("prio") && !colores_NS[0].classList.contains("bloqueado") && !colores_NS[0].classList.contains("trainblock")){
+                        colores_NS[1].classList.remove("on");
+                        colores_NS[2].classList.add("on");
+                    }
+                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
+                        colores_SE[1].classList.remove("on");
+                        colores_SE[2].classList.add("on");
+                    }
+                    break;
+                case 10:
+                    if(colores_NE[0].classList.contains("prio") && !colores_NE[0].classList.contains("bloqueado") && !colores_NE[0].classList.contains("trainblock")){
+                        colores_NE[1].classList.remove("on");
+                        colores_NE[2].classList.add("on");
+                    }
+                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
+                        colores_EN[1].classList.remove("on");
+                        colores_EN[2].classList.add("on");
+                    }
+                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
+                        colores_OS[1].classList.remove("on");
+                        colores_OS[2].classList.add("on");
+                    }
+                    if(colores_SO[0].classList.contains("prio") && !colores_SO[0].classList.contains("bloqueado") && !colores_SO[0].classList.contains("trainblock")){
+                        colores_SO[1].classList.remove("on");
+                        colores_SO[2].classList.add("on");
+                    }
+                    break;
+            }
+            setTimeout(() => {
                 for (let i = 0; i < semaforos_interseccion.length; i++) {
                     if (semaforos_interseccion[i].classList.contains("prio")){
                         semaforos_interseccion[i].classList.remove("prio");
@@ -513,71 +594,155 @@ function finPrioridad (){
                 prioridad = false;
                     for (let i = 0; i < botones_prioridad.length; i++){
                         botones_prioridad[i].disabled = false;
-                    }                
-
-            }, 1000);
-        }else{
-            for (let i = 0; i < semaforos_interseccion.length; i++) {
-                if (semaforos_interseccion[i].classList.contains("prio")){
-                    semaforos_interseccion[i].classList.remove("prio");
+                    }
+            }, 2000);
+            }, 2000);
+        }
+        else{
+            for (let i = 0; i < semaforos_interseccion.length; i+=3) {
+                if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
+                    semaforos_interseccion[i+2].classList.remove("on");
+                    semaforos_interseccion[i+1].classList.add("on");
                 }
             }
-            apagarTodas();
-            todoAlRojo();
             switch (ciclo_semaforos){
                 case 1:
-                    ciclo1();
-                    timerActual = setTimeout(t10_15, resto);           
-                    break;
-                case 2:
-                    ciclo2();
-                    timerActual = setTimeout(t15_17, resto); 
-                    break;
-                case 3:
-                    ciclo3();
-                    timerActual = setTimeout(t17_27, resto); 
+                    if(colores_EO[0].classList.contains("prio") && !colores_EO[0].classList.contains("bloqueado") && !colores_EO[0].classList.contains("trainblock")){
+                        colores_EO[1].classList.remove("on");
+                        colores_EO[2].classList.add("on");
+                    }
+                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
+                        colores_EN[1].classList.remove("on");
+                        colores_EN[2].classList.add("on");
+                    }
+                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
+                        colores_OS[1].classList.remove("on");
+                        colores_OS[2].classList.add("on");
+                    }
+                    if(colores_OE[0].classList.contains("prio") && !colores_OE[0].classList.contains("bloqueado") && !colores_OE[0].classList.contains("trainblock")){
+                        colores_OE[1].classList.remove("on");
+                        colores_OE[2].classList.add("on");
+                    }
                     break;
                 case 4:
-                    ciclo4();
-                    timerActual = setTimeout(t27_32, resto); 
-                    break;
-                case 5:
-                    ciclo5();
-                    timerActual = setTimeout(t32_34, resto); 
-                    break;
-                case 6:
-                    ciclo6();
-                    timerActual = setTimeout(t34_44, resto); 
+                    if(colores_ON[0].classList.contains("prio") && !colores_ON[0].classList.contains("bloqueado") && !colores_ON[0].classList.contains("trainblock")){
+                        colores_ON[1].classList.remove("on");
+                        colores_ON[2].classList.add("on");
+                    }
+                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
+                        colores_NO[1].classList.remove("on");
+                        colores_NO[2].classList.add("on");
+                    }
+                    if(colores_ES[0].classList.contains("prio") && !colores_ES[0].classList.contains("bloqueado") && !colores_ES[0].classList.contains("trainblock")){
+                        colores_ES[1].classList.remove("on");
+                        colores_ES[2].classList.add("on");
+                    }
+                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
+                        colores_SE[1].classList.remove("on");
+                        colores_SE[2].classList.add("on");
+                    }
                     break;
                 case 7:
-                    ciclo7();
-                    timerActual = setTimeout(t44_49, resto); 
-                    break;
-                case 8:
-                    ciclo8();
-                    timerActual = setTimeout(t49_51, resto); 
-                    break;
-                case 9:
-                    ciclo9();
-                    timerActual = setTimeout(t51_61, resto); 
+                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
+                        colores_NO[1].classList.remove("on");
+                        colores_NO[2].classList.add("on");
+                    }
+                    if(colores_SN[0].classList.contains("prio") && !colores_SN[0].classList.contains("bloqueado") && !colores_SN[0].classList.contains("trainblock")){
+                        colores_SN[1].classList.remove("on");
+                        colores_SN[2].classList.add("on");
+                    }
+                    if(colores_NS[0].classList.contains("prio") && !colores_NS[0].classList.contains("bloqueado") && !colores_NS[0].classList.contains("trainblock")){
+                        colores_NS[1].classList.remove("on");
+                        colores_NS[2].classList.add("on");
+                    }
+                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
+                        colores_SE[1].classList.remove("on");
+                        colores_SE[2].classList.add("on");
+                    }
                     break;
                 case 10:
-                    ciclo10();
-                    timerActual = setTimeout(t61_66, resto); 
-                    break;
-                case 11:
-                    ciclo11();
-                    timerActual = setTimeout(t66_68, resto); 
-                    break;
-                case 12:
-                    ciclo12();
-                    timerActual = setTimeout(t0_10, resto); 
+                    if(colores_NE[0].classList.contains("prio") && !colores_NE[0].classList.contains("bloqueado") && !colores_NE[0].classList.contains("trainblock")){
+                        colores_NE[1].classList.remove("on");
+                        colores_NE[2].classList.add("on");
+                    }
+                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
+                        colores_EN[1].classList.remove("on");
+                        colores_EN[2].classList.add("on");
+                    }
+                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
+                        colores_OS[1].classList.remove("on");
+                        colores_OS[2].classList.add("on");
+                    }
+                    if(colores_SO[0].classList.contains("prio") && !colores_SO[0].classList.contains("bloqueado") && !colores_SO[0].classList.contains("trainblock")){
+                        colores_SO[1].classList.remove("on");
+                        colores_SO[2].classList.add("on");
+                    }
                     break;
             }
-            prioridad = false;
-                for (let i = 0; i < botones_prioridad.length; i++){
-                    botones_prioridad[i].disabled = false;
+            setTimeout(() => {
+                for (let i = 0; i < semaforos_interseccion.length; i++) {
+                    if (semaforos_interseccion[i].classList.contains("prio")){
+                        semaforos_interseccion[i].classList.remove("prio");
+                    }
                 }
+                apagarTodas();
+                todoAlRojo();
+                switch (ciclo_semaforos){
+                    case 1:
+                        ciclo1();
+                        timerActual = setTimeout(t10_15, resto);           
+                        break;
+                    case 2:
+                        ciclo2();
+                        timerActual = setTimeout(t15_17, resto); 
+                        break;
+                    case 3:
+                        ciclo3();
+                        timerActual = setTimeout(t17_27, resto); 
+                        break;
+                    case 4:
+                        ciclo4();
+                        timerActual = setTimeout(t27_32, resto); 
+                        break;
+                    case 5:
+                        ciclo5();
+                        timerActual = setTimeout(t32_34, resto); 
+                        break;
+                    case 6:
+                        ciclo6();
+                        timerActual = setTimeout(t34_44, resto); 
+                        break;
+                    case 7:
+                        ciclo7();
+                        timerActual = setTimeout(t44_49, resto); 
+                        break;
+                    case 8:
+                        ciclo8();
+                        timerActual = setTimeout(t49_51, resto); 
+                        break;
+                    case 9:
+                        ciclo9();
+                        timerActual = setTimeout(t51_61, resto); 
+                        break;
+                    case 10:
+                        ciclo10();
+                        timerActual = setTimeout(t61_66, resto); 
+                        break;
+                    case 11:
+                        ciclo11();
+                        timerActual = setTimeout(t66_68, resto); 
+                        break;
+                    case 12:
+                        ciclo12();
+                        timerActual = setTimeout(t0_10, resto); 
+                        break;
+                }
+                prioridad = false;
+                    for (let i = 0; i < botones_prioridad.length; i++){
+                        botones_prioridad[i].disabled = false;
+                    }
+            }, 2000);
+            
         }
         
     }

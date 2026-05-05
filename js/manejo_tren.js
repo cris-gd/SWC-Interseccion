@@ -32,6 +32,10 @@ function bloquearVehiculosT() {
             }, 5000);
         } else if (ambar.classList.contains("on")) {
             rojo.classList.add("trainblock");
+            setTimeout(() => {
+                ambar.classList.remove("on");
+                rojo.classList.add("on");
+            }, 5000);
         } else {
             rojo.classList.add("trainblock");
         }
@@ -52,7 +56,12 @@ function finBloqueoT(circles, index) {
             circles[i].classList.remove("on");
         }
         circles[index].classList.add("on");
-    }else{
+    }
+
+}
+
+function patch2() {
+    if(prioridad){
         for (let i = 0; i < semaforos_interseccion.length; i+=3) {
             if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
                 semaforos_interseccion[i].classList.remove("on");
@@ -61,7 +70,6 @@ function finBloqueoT(circles, index) {
             }
         }
     }
-
 }
 
 
@@ -160,15 +168,22 @@ function ejecutarCiclo() {
                     switch(ciclo_semaforos){
                         case 1:          
                             finBloqueoT(colores_OE, 2);
+                            patch2();
                             break;
                         case 4:
                             finBloqueoT(colores_SE, 2);
+                            patch2();
                             break;
                         case 7:
                             finBloqueoT(colores_SE, 2);
+                            patch2();
                             break;
                         case 10:
                             finBloqueoT(colores_NE, 2);
+                            patch2();
+                            break;
+                        default:
+                            patch2();
                             break;
                     }
                 }

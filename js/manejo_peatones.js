@@ -81,6 +81,10 @@ function bloquearVehiculos(semV) {
             }, 5000);
         } else if (ambar.classList.contains("on")) {
             rojo.classList.add("bloqueado");
+            setTimeout(() => {
+                ambar.classList.remove("on");
+                rojo.classList.add("on");
+            }, 5000);
         } else {
             rojo.classList.add("bloqueado");
         }
@@ -103,7 +107,12 @@ function finBloqueo(circles, index) {
             circles[i].classList.remove("on");
         }
         circles[index].classList.add("on");
-    }else{
+    }
+
+}
+
+function patch() {
+    if(prioridad){
         for (let i = 0; i < semaforos_interseccion.length; i+=3) {
             if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
                 semaforos_interseccion[i].classList.remove("on");
@@ -112,7 +121,6 @@ function finBloqueo(circles, index) {
             }
         }
     }
-
 }
 
 function activarPeaton(dir) {
@@ -148,15 +156,22 @@ function activarPeaton(dir) {
                     switch(ciclo_semaforos){
                         case 1:          
                             finBloqueo(colores_EN, 2);
+                            patch();
                             break;
                         case 4:
                             finBloqueo(colores_ON, 2);
+                            patch();
                             break;
                         case 7:
                             finBloqueo(colores_SN, 2);
+                            patch();
                             break;
                         case 10:
                             finBloqueo(colores_EN, 2);
+                            patch();
+                            break;
+                        default:
+                            patch();
                             break;
                     }
                     break;
@@ -164,15 +179,22 @@ function activarPeaton(dir) {
                     switch(ciclo_semaforos){
                         case 1:          
                             finBloqueo(colores_OS, 2);
+                            patch();
                             break;
                         case 4:
                             finBloqueo(colores_ES, 2);
+                            patch();
                             break;
                         case 7:
                             finBloqueo(colores_NS, 2);
+                            patch();
                             break;
                         case 10:
                             finBloqueo(colores_OS, 2);
+                            patch();
+                            break;
+                        default:
+                            patch();
                             break;
                     }
                     break;
@@ -181,15 +203,22 @@ function activarPeaton(dir) {
                         switch(ciclo_semaforos){
                             case 1:          
                                 finBloqueo(colores_OE, 2);
+                                patch();
                                 break;
                             case 4:
                                 finBloqueo(colores_SE, 2);
+                                patch();
                                 break;
                             case 7:
                                 finBloqueo(colores_SE, 2);
+                                patch();
                                 break;
                             case 10:
                                 finBloqueo(colores_NE, 2);
+                                patch();
+                                break;
+                            default:
+                                patch();
                                 break;
                         }
                         break;
@@ -199,15 +228,22 @@ function activarPeaton(dir) {
                     switch(ciclo_semaforos){
                         case 1:          
                             finBloqueo(colores_EO, 2);
+                            patch();
                             break;
                         case 4:
                             finBloqueo(colores_NO, 2);
+                            patch();
                             break;
                         case 7:
                             finBloqueo(colores_NO, 2);
+                            patch();
                             break;
                         case 10:
                             finBloqueo(colores_SO, 2);
+                            patch();
+                            break;
+                        default:
+                            patch();
                             break;
                     }
                     break;
