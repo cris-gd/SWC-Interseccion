@@ -51,7 +51,78 @@ header {
     flex-shrink: 0;
     gap: 16px;
 }
+/* ─── DARK MODE ─── */
 
+body.dark-mode {
+    --bg:           #111827;
+    --panel-bg:     #1f2937;
+    --surface:      #273244;
+    --border:       #3b4758;
+    --border-soft:  #4b5563;
+    --accent:       #60a5fa;
+    --text:         #f3f4f6;
+    --text-dim:     #9ca3af;
+    --header-bg:    #1b2431;
+
+    --svg-grass:        #42543a;
+    --svg-kerb:         #6b7280;
+    --svg-road:         #2d3748;
+    --svg-road-center:  #374151;
+    --svg-centre-line:  #facc15;
+    --svg-lane-divider: rgba(255,255,255,0.7);
+
+    --tl-housing-fill:   #0f0f0f;
+    --tl-housing-stroke: #666;
+}
+
+/* ─── TOGGLE ─── */
+
+.theme-toggle {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+}
+
+.switch {
+    position: relative;
+    width: 52px;
+    height: 28px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    inset: 0;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+.slider::before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 3px;
+    top: 2px;
+    background: var(--accent);
+    border-radius: 50%;
+    transition: 0.25s;
+}
+
+.switch input:checked + .slider::before {
+    transform: translateX(23px);
+}
 .logo {
     width: 54px;
     height: 54px;
@@ -326,6 +397,13 @@ select,
     color: var(--text);
     width: 100%;
     cursor: pointer;
+}
+
+#btn-send-emergency:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #cccccc;
+    transform: none;
 }
 
 input[type="number"]:focus, 

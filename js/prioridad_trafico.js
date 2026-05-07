@@ -11,32 +11,60 @@ const botones_prioridad = document.getElementsByClassName("boton-prioridad");
 
 let inicio_prioridad;
 let resto;
+let timeoutPrioridad = null; // Timeout para la finalización de prioridad
 
 // =====================================================
-// CONFLICTOS DE CARRIL: rutas cuyo destino comparte carril físico
-// con la ruta priorizada. Hay que esperar a que esos coches despejen
-// antes de dar el verde de prioridad.
+// FUNCIONES AUXILIARES PARA GESTIÓN DE SEMÁFOROS
 // =====================================================
 
-// Para cada combinación (dirección, esExt), lista de rutas {from,to}
-// cuyo DESTINO ocupa el mismo carril que la ruta priorizada.
+// Poner todos los semáforos en rojo (respetando bloques)
+function todoAlRojoPrioridad() {
+    for (let i = 0; i < semaforos_interseccion.length; i += 3) {
+        const rojo = semaforos_interseccion[i];
+        const ambar = semaforos_interseccion[i+1];
+        const verde = semaforos_interseccion[i+2];
+        
+        // No modificar si está bloqueado por peatón o tren
+        if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
+            ambar.classList.remove("on");
+            verde.classList.remove("on");
+            rojo.classList.add("on");
+        }
+    }
+}
+
+// Poner un semáforo específico en verde (el que tiene prioridad)
+function ponerVerdePrioritario(semaphoreCircles) {
+    for (let i = 0; i < semaphoreCircles.length; i++) {
+        semaphoreCircles[i].classList.remove("on");
+    }
+    semaphoreCircles[2].classList.add("on"); // Índice 2 = verde
+}
+
+// Obtener los círculos del semáforo por su ID
+function getSemaphoreCircles(tlId) {
+    const semaforo = document.getElementById(tlId);
+    if (semaforo) {
+        return semaforo.getElementsByTagName("circle");
+    }
+    return null;
+}
+
+// =====================================================
+// CONFLICTOS DE CARRIL
+// =====================================================
+
 const CONFLICTOS_PRIORIDAD = {
-    'N-ext': [{ from:'E', to:'O' }, { from:'S', to:'O' }],  // prio N→O/S → carril O y carril S
-    'N-int': [{ from:'S', to:'E' }, { from:'O', to:'E' }],  // prio N→E  → carril E
-    'S-ext': [{ from:'O', to:'E' }, { from:'N', to:'E' }],  // prio S→E/N → carril E y carril N
-    'S-int': [{ from:'E', to:'O' }, { from:'N', to:'O' }],  // prio S→O  → carril O
-    'E-ext': [{ from:'N', to:'O' }, { from:'S', to:'O' }],  // prio E→O/N → carril O y carril N  
-    'E-int': [{ from:'N', to:'S' }, { from:'O', to:'S' }],  // prio E→S  → carril S
-    'O-ext': [{ from:'N', to:'S' }, { from:'S', to:'E' }],  // prio O→S/E → carril S y carril E
-    'O-int': [{ from:'E', to:'N' }, { from:'S', to:'N' }],  // prio O→N  → carril N
+    'N-ext': [{ from:'E', to:'O' }, { from:'S', to:'O' }],
+    'N-int': [{ from:'S', to:'E' }, { from:'O', to:'E' }],
+    'S-ext': [{ from:'O', to:'E' }, { from:'N', to:'E' }],
+    'S-int': [{ from:'E', to:'O' }, { from:'N', to:'O' }],
+    'E-ext': [{ from:'N', to:'O' }, { from:'S', to:'O' }],
+    'E-int': [{ from:'N', to:'S' }, { from:'O', to:'S' }],
+    'O-ext': [{ from:'N', to:'S' }, { from:'S', to:'E' }],
+    'O-int': [{ from:'E', to:'N' }, { from:'S', to:'N' }],
 };
 
-/**
- * Devuelve true si hay algún coche activo cuya ruta (from→to) coincida
- * con alguna de las rutas conflictivas para la prioridad pedida,
- * Y ese coche ya cruzó la stop-line (está en la intersección o más allá),
- * es decir, aún puede ocupar el carril destino.
- */
 function hayConflictoEnCarril(laneDirection, laneIsExt) {
     const key = laneDirection + (laneIsExt ? '-ext' : '-int');
     const conflictos = CONFLICTOS_PRIORIDAD[key];
@@ -46,11 +74,9 @@ function hayConflictoEnCarril(laneDirection, laneIsExt) {
 
     for (const car of activeCars) {
         if (car.isEmergency) continue;
-        // ¿Coincide la ruta del coche con algún conflicto?
         const esConflicto = conflictos.some(c => c.from === car.from && c.to === car.to);
         if (!esConflicto) continue;
 
-        // ¿Ya cruzó la stop-line? (está en tránsito por la intersección)
         const stopLine = stopLines[car.direction];
         if (stopLine === undefined) continue;
 
@@ -67,19 +93,14 @@ function hayConflictoEnCarril(laneDirection, laneIsExt) {
     return false;
 }
 
-/**
- * Espera hasta que no haya coches conflictivos en tránsito y luego
- * ejecuta el callback que activa el verde de prioridad.
- * Reintenta cada 150ms con un timeout máximo de 4s para no bloquear indefinidamente.
- */
-function esperarYDarVerde(laneDirection, laneIsExt, callback) {
+function esperarYDarVerde(laneDirection, laneIsExt, semaphoreCircles, callback) {
     const MAX_WAIT = 4000;
-    const POLL_MS  = 150;
-    const start    = Date.now();
+    const POLL_MS = 150;
+    const start = Date.now();
 
     function poll() {
         if (!hayConflictoEnCarril(laneDirection, laneIsExt) || (Date.now() - start) >= MAX_WAIT) {
-            callback();
+            callback(semaphoreCircles);
         } else {
             setTimeout(poll, POLL_MS);
         }
@@ -87,669 +108,218 @@ function esperarYDarVerde(laneDirection, laneIsExt, callback) {
     poll();
 }
 
-function darPrioridad (laneDirection, laneIsExt){
-    if (prioridad) return;
-    prioridad = true;
-    inicio_prioridad = Date.now()
-    resto = duracionFase - (inicio_prioridad - inicio_fase);
-    for (let i = 0; i < botones_prioridad.length; i++){
-        botones_prioridad[i].disabled = true;
-    }
-    clearTimeout(timerActual);
-    switch(laneDirection){
+// =====================================================
+// OBTENER SEMÁFOROS PRIORITARIOS SEGÚN DIRECCIÓN
+// =====================================================
+
+function getPrioritarySemaphores(laneDirection, laneIsExt) {
+    const semaphores = [];
+    
+    switch(laneDirection) {
         case "N":
-            if(laneIsExt){
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-N-O-") || semaforos_interseccion[i].id.includes("-N-S-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }
-            }else{
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-N-E-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }
+            if (laneIsExt) {
+                // Carril exterior N: puede ir a S (recto) o a O (izquierda)
+                semaphores.push(getSemaphoreCircles("tl-N-S"));
+                semaphores.push(getSemaphoreCircles("tl-N-O"));
+            } else {
+                // Carril interior N: puede ir a E (derecha)
+                semaphores.push(getSemaphoreCircles("tl-N-E"));
             }
             break;
         case "S":
-            if(laneIsExt){
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-S-E-") || semaforos_interseccion[i].id.includes("-S-N-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }
-            }else{
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-S-O-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }          
+            if (laneIsExt) {
+                // Carril exterior S: puede ir a N (recto) o a E (izquierda)
+                semaphores.push(getSemaphoreCircles("tl-S-N"));
+                semaphores.push(getSemaphoreCircles("tl-S-E"));
+            } else {
+                // Carril interior S: puede ir a O (derecha)
+                semaphores.push(getSemaphoreCircles("tl-S-O"));
             }
             break;
         case "E":
-            if(laneIsExt){
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-E-N-") || semaforos_interseccion[i].id.includes("-E-O-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }
-            }else{
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-E-S-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                } 
+            if (laneIsExt) {
+                // Carril exterior E: puede ir a O (recto) o a N (izquierda)
+                semaphores.push(getSemaphoreCircles("tl-E-O"));
+                semaphores.push(getSemaphoreCircles("tl-E-N"));
+            } else {
+                // Carril interior E: puede ir a S (derecha)
+                semaphores.push(getSemaphoreCircles("tl-E-S"));
             }
             break;
         case "O":
-            if(laneIsExt){
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-O-S-") || semaforos_interseccion[i].id.includes("-O-E-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                }
-            }else{
-                for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                    const rojo  = semaforos_interseccion[i];
-                    const ambar = semaforos_interseccion[i+1];
-                    const verde = semaforos_interseccion[i+2];
-
-                    if (semaforos_interseccion[i].id.includes("-O-N-")) {
-
-                        // Marcar como prio inmediatamente (mantiene el ámbar/rojo actual)
-                        rojo.classList.add("prio");
-                        ambar.classList.add("prio");
-                        verde.classList.add("prio");
-                        // Capturar referencias para el closure
-                        (function(r, a, v) {
-                            // Dar ámbar primero (1s), luego esperar carril libre y dar verde
-                            setTimeout(() => {
-                                esperarYDarVerde(laneDirection, laneIsExt, () => {
-                                    if (!r.classList.contains("bloqueado") && !r.classList.contains("trainblock")) {
-                                        a.classList.remove("on");
-                                        v.classList.add("on");
-                                        r.classList.remove("on");
-                                    }
-                                });
-                            }, 2000);
-                        })(rojo, ambar, verde);
-
-                    }else{
-
-                        if(verde.classList.contains("on")){
-                            ambar.classList.add("on");
-                            verde.classList.remove("on");
-                            rojo.classList.remove("on");
-                        }
-                        setTimeout(() => {
-                            ambar.classList.remove("on");
-                            verde.classList.remove("on");
-                            rojo.classList.add("on");
-                        }, 2000);
-
-                    }
-
-                } 
+            if (laneIsExt) {
+                // Carril exterior O: puede ir a E (recto) o a S (izquierda)
+                semaphores.push(getSemaphoreCircles("tl-O-E"));
+                semaphores.push(getSemaphoreCircles("tl-O-S"));
+            } else {
+                // Carril interior O: puede ir a N (derecha)
+                semaphores.push(getSemaphoreCircles("tl-O-N"));
             }
             break;
     }
+    
+    return semaphores.filter(s => s !== null);
 }
 
-function finPrioridad (){
-    if(prioridad){
-        if((Date.now() - inicio_prioridad)<2000){
-            setTimeout(() => {
+// =====================================================
+// FUNCIÓN PRINCIPAL DE PRIORIDAD
+// =====================================================
 
-            for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
-                    semaforos_interseccion[i+2].classList.remove("on");
-                    semaforos_interseccion[i+1].classList.add("on");
-                }
-            }
-            switch (ciclo_semaforos){
-                case 1:
-                    if(colores_EO[0].classList.contains("prio") && !colores_EO[0].classList.contains("bloqueado") && !colores_EO[0].classList.contains("trainblock")){
-                        colores_EO[1].classList.remove("on");
-                        colores_EO[2].classList.add("on");
-                    }
-                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
-                        colores_EN[1].classList.remove("on");
-                        colores_EN[2].classList.add("on");
-                    }
-                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
-                        colores_OS[1].classList.remove("on");
-                        colores_OS[2].classList.add("on");
-                    }
-                    if(colores_OE[0].classList.contains("prio") && !colores_OE[0].classList.contains("bloqueado") && !colores_OE[0].classList.contains("trainblock")){
-                        colores_OE[1].classList.remove("on");
-                        colores_OE[2].classList.add("on");
-                    }
-                    break;
-                case 4:
-                    if(colores_ON[0].classList.contains("prio") && !colores_ON[0].classList.contains("bloqueado") && !colores_ON[0].classList.contains("trainblock")){
-                        colores_ON[1].classList.remove("on");
-                        colores_ON[2].classList.add("on");
-                    }
-                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
-                        colores_NO[1].classList.remove("on");
-                        colores_NO[2].classList.add("on");
-                    }
-                    if(colores_ES[0].classList.contains("prio") && !colores_ES[0].classList.contains("bloqueado") && !colores_ES[0].classList.contains("trainblock")){
-                        colores_ES[1].classList.remove("on");
-                        colores_ES[2].classList.add("on");
-                    }
-                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
-                        colores_SE[1].classList.remove("on");
-                        colores_SE[2].classList.add("on");
-                    }
-                    break;
-                case 7:
-                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
-                        colores_NO[1].classList.remove("on");
-                        colores_NO[2].classList.add("on");
-                    }
-                    if(colores_SN[0].classList.contains("prio") && !colores_SN[0].classList.contains("bloqueado") && !colores_SN[0].classList.contains("trainblock")){
-                        colores_SN[1].classList.remove("on");
-                        colores_SN[2].classList.add("on");
-                    }
-                    if(colores_NS[0].classList.contains("prio") && !colores_NS[0].classList.contains("bloqueado") && !colores_NS[0].classList.contains("trainblock")){
-                        colores_NS[1].classList.remove("on");
-                        colores_NS[2].classList.add("on");
-                    }
-                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
-                        colores_SE[1].classList.remove("on");
-                        colores_SE[2].classList.add("on");
-                    }
-                    break;
-                case 10:
-                    if(colores_NE[0].classList.contains("prio") && !colores_NE[0].classList.contains("bloqueado") && !colores_NE[0].classList.contains("trainblock")){
-                        colores_NE[1].classList.remove("on");
-                        colores_NE[2].classList.add("on");
-                    }
-                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
-                        colores_EN[1].classList.remove("on");
-                        colores_EN[2].classList.add("on");
-                    }
-                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
-                        colores_OS[1].classList.remove("on");
-                        colores_OS[2].classList.add("on");
-                    }
-                    if(colores_SO[0].classList.contains("prio") && !colores_SO[0].classList.contains("bloqueado") && !colores_SO[0].classList.contains("trainblock")){
-                        colores_SO[1].classList.remove("on");
-                        colores_SO[2].classList.add("on");
-                    }
-                    break;
-            }
-            setTimeout(() => {
-                for (let i = 0; i < semaforos_interseccion.length; i++) {
-                    if (semaforos_interseccion[i].classList.contains("prio")){
-                        semaforos_interseccion[i].classList.remove("prio");
-                    }
-                }
-                apagarTodas();
-                todoAlRojo();
-                switch (ciclo_semaforos){
-                    case 1:
-                        ciclo1();
-                        timerActual = setTimeout(t10_15, resto);           
-                        break;
-                    case 2:
-                        ciclo2();
-                        timerActual = setTimeout(t15_17, resto); 
-                        break;
-                    case 3:
-                        ciclo3();
-                        timerActual = setTimeout(t17_27, resto); 
-                        break;
-                    case 4:
-                        ciclo4();
-                        timerActual = setTimeout(t27_32, resto); 
-                        break;
-                    case 5:
-                        ciclo5();
-                        timerActual = setTimeout(t32_34, resto); 
-                        break;
-                    case 6:
-                        ciclo6();
-                        timerActual = setTimeout(t34_44, resto); 
-                        break;
-                    case 7:
-                        ciclo7();
-                        timerActual = setTimeout(t44_49, resto); 
-                        break;
-                    case 8:
-                        ciclo8();
-                        timerActual = setTimeout(t49_51, resto); 
-                        break;
-                    case 9:
-                        ciclo9();
-                        timerActual = setTimeout(t51_61, resto); 
-                        break;
-                    case 10:
-                        ciclo10();
-                        timerActual = setTimeout(t61_66, resto); 
-                        break;
-                    case 11:
-                        ciclo11();
-                        timerActual = setTimeout(t66_68, resto); 
-                        break;
-                    case 12:
-                        ciclo12();
-                        timerActual = setTimeout(t0_10, resto); 
-                        break;
-                }
-                prioridad = false;
-                    for (let i = 0; i < botones_prioridad.length; i++){
-                        botones_prioridad[i].disabled = false;
-                    }
-            }, 2000);
-            }, 2000);
+function darPrioridad(laneDirection, laneIsExt) {
+    // Si ya hay una prioridad activa, no hacer nada
+    if (prioridad) return;
+    
+    // Cancelar cualquier timeout pendiente de finalización
+    if (timeoutPrioridad) {
+        clearTimeout(timeoutPrioridad);
+        timeoutPrioridad = null;
+    }
+    
+    prioridad = true;
+    inicio_prioridad = Date.now();
+    resto = duracionFase - (inicio_prioridad - inicio_fase);
+    
+    // Deshabilitar todos los botones de prioridad durante la operación
+    for (let i = 0; i < botones_prioridad.length; i++) {
+        botones_prioridad[i].disabled = true;
+    }
+    
+    // Detener el ciclo normal actual
+    clearTimeout(timerActual);
+    
+    // PASO 1: Poner todos los semáforos en rojo
+    todoAlRojoPrioridad();
+    
+    // PASO 2: Obtener los semáforos prioritarios
+    const prioritarySemaphores = getPrioritarySemaphores(laneDirection, laneIsExt);
+    
+    // PASO 3: Marcar los semáforos prioritarios y cambiar a ámbar (luego verde)
+    for (const semCircles of prioritarySemaphores) {
+        if (!semCircles) continue;
+        
+        const rojo = semCircles[0];
+        const ambar = semCircles[1];
+        const verde = semCircles[2];
+        
+        // Marcar como prioritario (para que no sean afectados por otros procesos)
+        rojo.classList.add("prio");
+        ambar.classList.add("prio");
+        verde.classList.add("prio");
+        
+        // Si el semáforo está en rojo, pasar a ámbar
+        if (rojo.classList.contains("on")) {
+            rojo.classList.remove("on");
+            ambar.classList.add("on");
         }
-        else{
-            for (let i = 0; i < semaforos_interseccion.length; i+=3) {
-                if (semaforos_interseccion[i].classList.contains("prio") && !semaforos_interseccion[i].classList.contains("bloqueado") && !semaforos_interseccion[i].classList.contains("trainblock")){
-                    semaforos_interseccion[i+2].classList.remove("on");
-                    semaforos_interseccion[i+1].classList.add("on");
-                }
-            }
-            switch (ciclo_semaforos){
-                case 1:
-                    if(colores_EO[0].classList.contains("prio") && !colores_EO[0].classList.contains("bloqueado") && !colores_EO[0].classList.contains("trainblock")){
-                        colores_EO[1].classList.remove("on");
-                        colores_EO[2].classList.add("on");
-                    }
-                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
-                        colores_EN[1].classList.remove("on");
-                        colores_EN[2].classList.add("on");
-                    }
-                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
-                        colores_OS[1].classList.remove("on");
-                        colores_OS[2].classList.add("on");
-                    }
-                    if(colores_OE[0].classList.contains("prio") && !colores_OE[0].classList.contains("bloqueado") && !colores_OE[0].classList.contains("trainblock")){
-                        colores_OE[1].classList.remove("on");
-                        colores_OE[2].classList.add("on");
-                    }
-                    break;
-                case 4:
-                    if(colores_ON[0].classList.contains("prio") && !colores_ON[0].classList.contains("bloqueado") && !colores_ON[0].classList.contains("trainblock")){
-                        colores_ON[1].classList.remove("on");
-                        colores_ON[2].classList.add("on");
-                    }
-                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
-                        colores_NO[1].classList.remove("on");
-                        colores_NO[2].classList.add("on");
-                    }
-                    if(colores_ES[0].classList.contains("prio") && !colores_ES[0].classList.contains("bloqueado") && !colores_ES[0].classList.contains("trainblock")){
-                        colores_ES[1].classList.remove("on");
-                        colores_ES[2].classList.add("on");
-                    }
-                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
-                        colores_SE[1].classList.remove("on");
-                        colores_SE[2].classList.add("on");
-                    }
-                    break;
-                case 7:
-                    if(colores_NO[0].classList.contains("prio") && !colores_NO[0].classList.contains("bloqueado") && !colores_NO[0].classList.contains("trainblock")){
-                        colores_NO[1].classList.remove("on");
-                        colores_NO[2].classList.add("on");
-                    }
-                    if(colores_SN[0].classList.contains("prio") && !colores_SN[0].classList.contains("bloqueado") && !colores_SN[0].classList.contains("trainblock")){
-                        colores_SN[1].classList.remove("on");
-                        colores_SN[2].classList.add("on");
-                    }
-                    if(colores_NS[0].classList.contains("prio") && !colores_NS[0].classList.contains("bloqueado") && !colores_NS[0].classList.contains("trainblock")){
-                        colores_NS[1].classList.remove("on");
-                        colores_NS[2].classList.add("on");
-                    }
-                    if(colores_SE[0].classList.contains("prio") && !colores_SE[0].classList.contains("bloqueado") && !colores_SE[0].classList.contains("trainblock")){
-                        colores_SE[1].classList.remove("on");
-                        colores_SE[2].classList.add("on");
-                    }
-                    break;
-                case 10:
-                    if(colores_NE[0].classList.contains("prio") && !colores_NE[0].classList.contains("bloqueado") && !colores_NE[0].classList.contains("trainblock")){
-                        colores_NE[1].classList.remove("on");
-                        colores_NE[2].classList.add("on");
-                    }
-                    if(colores_EN[0].classList.contains("prio") && !colores_EN[0].classList.contains("bloqueado") && !colores_EN[0].classList.contains("trainblock")){
-                        colores_EN[1].classList.remove("on");
-                        colores_EN[2].classList.add("on");
-                    }
-                    if(colores_OS[0].classList.contains("prio") && !colores_OS[0].classList.contains("bloqueado") && !colores_OS[0].classList.contains("trainblock")){
-                        colores_OS[1].classList.remove("on");
-                        colores_OS[2].classList.add("on");
-                    }
-                    if(colores_SO[0].classList.contains("prio") && !colores_SO[0].classList.contains("bloqueado") && !colores_SO[0].classList.contains("trainblock")){
-                        colores_SO[1].classList.remove("on");
-                        colores_SO[2].classList.add("on");
-                    }
-                    break;
-            }
-            setTimeout(() => {
-                for (let i = 0; i < semaforos_interseccion.length; i++) {
-                    if (semaforos_interseccion[i].classList.contains("prio")){
-                        semaforos_interseccion[i].classList.remove("prio");
-                    }
-                }
-                apagarTodas();
-                todoAlRojo();
-                switch (ciclo_semaforos){
-                    case 1:
-                        ciclo1();
-                        timerActual = setTimeout(t10_15, resto);           
-                        break;
-                    case 2:
-                        ciclo2();
-                        timerActual = setTimeout(t15_17, resto); 
-                        break;
-                    case 3:
-                        ciclo3();
-                        timerActual = setTimeout(t17_27, resto); 
-                        break;
-                    case 4:
-                        ciclo4();
-                        timerActual = setTimeout(t27_32, resto); 
-                        break;
-                    case 5:
-                        ciclo5();
-                        timerActual = setTimeout(t32_34, resto); 
-                        break;
-                    case 6:
-                        ciclo6();
-                        timerActual = setTimeout(t34_44, resto); 
-                        break;
-                    case 7:
-                        ciclo7();
-                        timerActual = setTimeout(t44_49, resto); 
-                        break;
-                    case 8:
-                        ciclo8();
-                        timerActual = setTimeout(t49_51, resto); 
-                        break;
-                    case 9:
-                        ciclo9();
-                        timerActual = setTimeout(t51_61, resto); 
-                        break;
-                    case 10:
-                        ciclo10();
-                        timerActual = setTimeout(t61_66, resto); 
-                        break;
-                    case 11:
-                        ciclo11();
-                        timerActual = setTimeout(t66_68, resto); 
-                        break;
-                    case 12:
-                        ciclo12();
-                        timerActual = setTimeout(t0_10, resto); 
-                        break;
-                }
-                prioridad = false;
-                    for (let i = 0; i < botones_prioridad.length; i++){
-                        botones_prioridad[i].disabled = false;
-                    }
-            }, 2000);
+    }
+    
+    // PASO 4: Después de 2 segundos en ámbar, pasar a verde (esperando que el carril esté libre)
+    setTimeout(() => {
+        for (const semCircles of prioritarySemaphores) {
+            if (!semCircles) continue;
             
+            const rojo = semCircles[0];
+            const ambar = semCircles[1];
+            const verde = semCircles[2];
+            
+            // Verificar conflictos de carril antes de dar verde
+            esperarYDarVerde(laneDirection, laneIsExt, semCircles, (circles) => {
+                if (!rojo.classList.contains("bloqueado") && !rojo.classList.contains("trainblock")) {
+                    ambar.classList.remove("on");
+                    verde.classList.add("on");
+                    rojo.classList.remove("on");
+                }
+            });
+        }
+    }, 2000);
+}
+
+// =====================================================
+// FINALIZACIÓN DE PRIORIDAD
+// =====================================================
+
+function finPrioridad() {
+    if (!prioridad) return;
+    
+    const tiempoTranscurrido = Date.now() - inicio_prioridad;
+    
+    // Si ha pasado menos de 2 segundos, esperar a que termine el ciclo de ámbar
+    if (tiempoTranscurrido < 2000) {
+        // Programar la finalización después de que termine el ámbar
+        if (timeoutPrioridad) clearTimeout(timeoutPrioridad);
+        timeoutPrioridad = setTimeout(() => {
+            finalizarPrioridad();
+        }, 2000 - tiempoTranscurrido);
+        return;
+    }
+    
+    finalizarPrioridad();
+}
+
+function finalizarPrioridad() {
+    if (!prioridad) return;
+    
+    // PASO 1: Poner en ámbar los semáforos que estaban en verde prioritario
+    for (let i = 0; i < semaforos_interseccion.length; i += 3) {
+        const rojo = semaforos_interseccion[i];
+        const ambar = semaforos_interseccion[i+1];
+        const verde = semaforos_interseccion[i+2];
+        
+        if (rojo.classList.contains("prio") && verde.classList.contains("on")) {
+            verde.classList.remove("on");
+            ambar.classList.add("on");
+        }
+    }
+    
+    // PASO 2: Esperar 2 segundos en ámbar y luego restaurar el ciclo normal
+    setTimeout(() => {
+        // Limpiar marcas de prioridad
+        for (let i = 0; i < semaforos_interseccion.length; i++) {
+            if (semaforos_interseccion[i].classList.contains("prio")) {
+                semaforos_interseccion[i].classList.remove("prio");
+            }
         }
         
+        // Apagar todas las luces y poner en rojo
+        apagarTodas();
+        todoAlRojo();
+        
+        // Reanudar el ciclo desde la fase en la que estaba interrumpido
+        reanudarCiclo(resto);
+        
+        prioridad = false;
+        
+        // Rehabilitar botones de prioridad
+        for (let i = 0; i < botones_prioridad.length; i++) {
+            botones_prioridad[i].disabled = false;
+        }
+        
+        timeoutPrioridad = null;
+    }, 2000);
+}
+
+function reanudarCiclo(tiempoRestante) {
+    // Restaurar el ciclo desde la fase actual con el tiempo restante
+    switch (ciclo_semaforos) {
+        case 1: ciclo1(); timerActual = setTimeout(t10_15, tiempoRestante); break;
+        case 2: ciclo2(); timerActual = setTimeout(t15_17, tiempoRestante); break;
+        case 3: ciclo3(); timerActual = setTimeout(t17_27, tiempoRestante); break;
+        case 4: ciclo4(); timerActual = setTimeout(t27_32, tiempoRestante); break;
+        case 5: ciclo5(); timerActual = setTimeout(t32_34, tiempoRestante); break;
+        case 6: ciclo6(); timerActual = setTimeout(t34_44, tiempoRestante); break;
+        case 7: ciclo7(); timerActual = setTimeout(t44_49, tiempoRestante); break;
+        case 8: ciclo8(); timerActual = setTimeout(t49_51, tiempoRestante); break;
+        case 9: ciclo9(); timerActual = setTimeout(t51_61, tiempoRestante); break;
+        case 10: ciclo10(); timerActual = setTimeout(t61_66, tiempoRestante); break;
+        case 11: ciclo11(); timerActual = setTimeout(t66_68, tiempoRestante); break;
+        case 12: ciclo12(); timerActual = setTimeout(t0_10, tiempoRestante); break;
+        default: t0_10(); break;
     }
 }
 
-
-
+// =====================================================
+// EVENT LISTENERS
+// =====================================================
 
 boton_ext_N.addEventListener("mousedown", () => darPrioridad("N", true));
 boton_int_N.addEventListener("mousedown", () => darPrioridad("N", false));

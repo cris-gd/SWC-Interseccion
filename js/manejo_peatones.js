@@ -22,6 +22,94 @@ const bloqueando = { N: false, S: false, E: false, O: false };
 const semPeatonPorDir = { N: semaforos_N_p, S: semaforos_S_p, E: semaforos_E_p, O: semaforos_O_p };
 const semVehicPorDir  = { N: direc_N, S: direc_S, E: direc_E, O: direc_O };
 
+// Timeout de la fase ámbar peatonal (antes de que el peatón empiece a cruzar).
+// Si llega una emergencia durante este tiempo, se puede cancelar sin riesgo.
+const peatonPendienteTimeout = { N: null, S: null, E: null, O: null };
+// true cuando el peatón ya está cruzando activamente (animación iniciada).
+// En ese caso la emergencia NO cancela el cruce, deja que termine.
+const peatonCruzando = { N: false, S: false, E: false, O: false };
+
+/**
+ * Cancela el cruce peatonal de una dirección si todavía no ha empezado
+ * (la animación no se ha iniciado). Llamado desde manejo_vehiculos_especiales.js
+ * cuando se activa una ruta de emergencia.
+ * 
+ * El semáforo peatonal sigue su ciclo completo (ámbar → rojo → verde)
+ * aunque el peatón no cruce, para mantener coherencia visual.
+ * Los vehículos ya están bloqueados por la emergencia, así que no afecta.
+ */
+function cancelarPeatonPendiente(dir) {
+    if (peatonCruzando[dir]) return; // ya cruzando → no cancelar
+    if (!bloqueando[dir]) return;    // no había nada pendiente
+
+    // Cancelar el timeout original que habría iniciado la animación
+    if (peatonPendienteTimeout[dir] !== null) {
+        clearTimeout(peatonPendienteTimeout[dir]);
+        peatonPendienteTimeout[dir] = null;
+    }
+
+    // El semáforo peatonal ya está en ÁMBAR (desde activarPeaton)
+    // Programamos que pase a ROJO después de 5 segundos (sin animación de peatón)
+    setTimeout(() => {
+        // Paso: peatón → rojo
+        const semP = semPeatonPorDir[dir];
+        aplicarEstadoPeaton(semP, 0);
+        
+        // Después de 10 segundos en rojo, volver a verde
+        setTimeout(() => {
+            aplicarEstadoPeaton(semP, 2);
+            
+            // Desbloquear vehículos (vuelven a su ciclo normal)
+            const semV = semVehicPorDir[dir];
+            desbloquearVehiculos(semV);
+            bloqueando[dir] = false;
+            
+            // Restaurar semáforos de vehículos según ciclo actual
+            switch(dir){
+                case 'N':
+                    switch(ciclo_semaforos){
+                        case 1: finBloqueo(colores_EN, 2); patch(); break;
+                        case 4: finBloqueo(colores_ON, 2); patch(); break;
+                        case 7: finBloqueo(colores_SN, 2); patch(); break;
+                        case 10: finBloqueo(colores_EN, 2); patch(); break;
+                        default: patch(); break;
+                    }
+                    break;
+                case 'S':
+                    switch(ciclo_semaforos){
+                        case 1: finBloqueo(colores_OS, 2); patch(); break;
+                        case 4: finBloqueo(colores_ES, 2); patch(); break;
+                        case 7: finBloqueo(colores_NS, 2); patch(); break;
+                        case 10: finBloqueo(colores_OS, 2); patch(); break;
+                        default: patch(); break;
+                    }
+                    break;
+                case 'E':
+                    if(bloqueo_tren == false){
+                        switch(ciclo_semaforos){
+                            case 1: finBloqueo(colores_OE, 2); patch(); break;
+                            case 4: finBloqueo(colores_SE, 2); patch(); break;
+                            case 7: finBloqueo(colores_SE, 2); patch(); break;
+                            case 10: finBloqueo(colores_NE, 2); patch(); break;
+                            default: patch(); break;
+                        }
+                    }
+                    break;
+                case 'O':
+                    switch(ciclo_semaforos){
+                        case 1: finBloqueo(colores_EO, 2); patch(); break;
+                        case 4: finBloqueo(colores_NO, 2); patch(); break;
+                        case 7: finBloqueo(colores_NO, 2); patch(); break;
+                        case 10: finBloqueo(colores_SO, 2); patch(); break;
+                        default: patch(); break;
+                    }
+                    break;
+            }
+        }, 10000); // 10 segundos en rojo
+        
+    }, 5000); // 5 segundos en ámbar
+}
+
 // Referencias a los elementos de peatones animados
 const peatones = {
     N: document.getElementById("peaton-N"),
@@ -126,6 +214,7 @@ function patch() {
 function activarPeaton(dir) {
     if (bloqueando[dir]) return;
     bloqueando[dir] = true;
+    peatonCruzando[dir] = false;
 
     const semP = semPeatonPorDir[dir];
     const semV = semVehicPorDir[dir];
@@ -134,16 +223,18 @@ function activarPeaton(dir) {
     aplicarEstadoPeaton(semP, 1);
     bloquearVehiculos(semV);
 
-    setTimeout(() => {
+    peatonPendienteTimeout[dir] = setTimeout(() => {
+        peatonPendienteTimeout[dir] = null;
         // Paso 2: 5s después: peatón → rojo (empieza el cruce)
         aplicarEstadoPeaton(semP, 0);
-        
+        peatonCruzando[dir] = true; // a partir de aquí ya no se puede cancelar
+
         // INICIAR ANIMACIÓN DEL PEATÓN (dura 3 segundos)
         reiniciarAnimacionPeaton(dir);
         
         // Paso 3: Esperar 10 segundos TOTALES en rojo
-        // (3 segundos de animación + 7 segundos adicionales de seguridad)
         setTimeout(() => {
+            peatonCruzando[dir] = false;
             // Paso 4: Después de 10s en rojo: peatón → verde
             aplicarEstadoPeaton(semP, 2);
             
