@@ -1,8 +1,3 @@
-// =====================================================
-// VEHÍCULOS ESPECIALES (EMERGENCIAS)
-// Requiere: manejo_coches.js cargado antes que este archivo
-// =====================================================
-
 let emergencyVehicles = [];
 let activeEmergencyRoutes = [];  // [{ from, to, carId, blockedDirections }]
 
@@ -11,6 +6,12 @@ const EMERGENCY_TYPES = {
     police:    { bodyColor: '#0033ff', accentColor: '#ffffff', label: 'P', lightColor: '#00cfff' },
     fire:      { bodyColor: '#cc2200', accentColor: '#ffcc00', label: 'F', lightColor: '#ffcc00' }
 };
+
+const RIGHT_TURN_PAIRS = new Set(['N-O', 'S-E', 'E-N', 'O-S']);
+
+function isRightTurn(from, to) {
+    return RIGHT_TURN_PAIRS.has(`${from}-${to}`);
+}
 
 // =====================================================
 // CARRILES NORMALES — referencia lateral fija por dirección de spawn
@@ -27,33 +28,18 @@ function yieldSign(direction) {
     return { S: -1, N: +1, E: -1, O: +1 }[direction] ?? 0;
 }
 
-/**
- * Devuelve la dirección de avance que usa la emergencia en cada tramo de su ruta.
- */
-function getEmergencyFlowDirections(route) {
-    const { from, to } = route;
-    if (from === to) return [];
-    if (from === 'N' && to === 'S') return ['S'];
-    if (from === 'S' && to === 'N') return ['N'];
-    if (from === 'E' && to === 'O') return ['O'];
-    if (from === 'O' && to === 'E') return ['E'];
-    const straightDir = { N: 'S', S: 'N', E: 'O', O: 'E' }[from];
-    const turnDir = to;
-    return [straightDir, turnDir];
-}
-
-/**
- * Calcula la distancia (en px, en el eje de avance compartido) entre
- * el frente del vehículo de emergencia y la trasera del coche ordinario.
- * Retorna Infinity si la emergencia ya está por delante del coche,
- * o si no pertenecen al mismo carril/dirección.
- *
- * Un valor positivo pequeño significa que la emergencia está cerca
- * y por detrás del coche → el coche debe apartarse.
- * Un valor negativo significa que la emergencia ya adelantó al coche
- * → el coche puede volver a su posición original.
- */
 function emergencyDistanceToCar(car, emgCar) {
+    /**
+     * Calcula la distancia (en px, en el eje de avance compartido) entre
+     * el frente del vehículo de emergencia y la trasera del coche ordinario.
+     * Retorna Infinity si la emergencia ya está por delante del coche,
+     * o si no pertenecen al mismo carril/dirección.
+     *
+     * Un valor positivo pequeño significa que la emergencia está cerca
+     * y por detrás del coche : el coche debe apartarse.
+     * Un valor negativo significa que la emergencia ya adelantó 
+     * al coche : el coche puede volver a su posición original.
+     */
     if (emgCar.direction !== car.direction) return Infinity;
 
     const emgFront = getFrontCoord(emgCar);
@@ -66,134 +52,6 @@ function emergencyDistanceToCar(car, emgCar) {
         case 'O': return emgFront - carRear;
     }
     return Infinity;
-}
-
-/**
- * True si `car` debe apartarse lateralmente por la emergencia `route`.
- *
- * Se comprueban los DOS tramos de la ruta de forma independiente,
- * usando la referencia lateral correcta para cada uno:
- *
- * TRAMO A — antes de girar (dirección de spawn):
- *   Referencia lateral: posición de spawn del vehículo de emergencia.
- *   Solo se activa cuando la emergencia todavía no ha girado Y está
- *   a menos de PROXIMITY_YIELD_DISTANCE px por detrás del coche
- *   (efecto ola: solo los coches cercanos reaccionan en cada momento).
- *
- * TRAMO B — después de girar (dirección de destino):
- *   Referencia lateral: posición actual de la emergencia en su eje
- *   lateral (es decir, el carril que ocupa tras el giro).
- *   Solo se activa cuando la emergencia ya ha girado Y está a menos de
- *   PROXIMITY_YIELD_DISTANCE px por detrás del coche.
- *
- * En ambos casos, cuando la emergencia ya ha adelantado al coche
- * (dist ≤ 0), getTargetLateral devuelve _baseLateral y el coche
- * vuelve suavemente a su posición original.
- */
-function isSameLaneAsEmergency(car, route) {
-    const LANE_TOL = 22;
-
-    const emgCar = emergencyVehicles.find(e => e.id === route.carId);
-    if (!emgCar) return false;
-
-    // ── TRAMO A: emergencia en su tramo inicial (no ha girado aún) ────────────
-    if (!emgCar.hasTurned && emgCar.direction === car.direction) {
-        // Referencia lateral: spawn de la emergencia
-        const startPos = getStartPosition(route.from, route.to);
-        if (!startPos) return false;
-
-        const carLateral = car._baseLateral !== undefined
-            ? car._baseLateral
-            : (car.direction === 'S' || car.direction === 'N' ? car.x : car.y);
-
-        const refLateral = (startPos.direction === 'S' || startPos.direction === 'N')
-            ? startPos.x
-            : startPos.y;
-
-        if (Math.abs(carLateral - refLateral) < LANE_TOL) {
-            const dist = emergencyDistanceToCar(car, emgCar);
-            return dist > 0 && dist < PROXIMITY_YIELD_DISTANCE;
-        }
-    }
-
-    // ── TRAMO B: emergencia tras el giro (hasTurned === true) ────────────────
-    if (emgCar.hasTurned && emgCar.direction === car.direction) {
-        // Referencia lateral: posición actual de la emergencia en su eje lateral
-        const emgLateral = (emgCar.direction === 'S' || emgCar.direction === 'N')
-            ? emgCar.x
-            : emgCar.y;
-
-        const carLateral = car._baseLateral !== undefined
-            ? car._baseLateral
-            : (car.direction === 'S' || car.direction === 'N' ? car.x : car.y);
-
-        if (Math.abs(carLateral - emgLateral) < LANE_TOL) {
-            const dist = emergencyDistanceToCar(car, emgCar);
-            return dist > 0 && dist < PROXIMITY_YIELD_DISTANCE;
-        }
-    }
-
-    return false;
-}
-
-/**
- * Devuelve la posición lateral objetivo para `car`:
- *  - Si hay una emergencia próxima en su carril → posición desplazada.
- *  - Si no → posición base (carril normal).
- *
- * El hecho de devolver siempre _baseLateral cuando no hay emergencia
- * garantiza que el coche vuelve suavemente a su posición en cuanto la
- * emergencia le adelanta (sin necesitar lógica adicional).
- */
-function getTargetLateral(car) {
-    if (car.isEmergency) return null;
-    if (car._baseLateral === undefined) return null;
-
-    const hasEmergency = activeEmergencyRoutes.some(r => isSameLaneAsEmergency(car, r));
-    return hasEmergency
-        ? car._baseLateral + yieldSign(car.direction) * YIELD_OFFSET
-        : car._baseLateral;
-}
-
-function smoothLateral(car, target) {
-    if (car.direction === 'S' || car.direction === 'N') {
-        if (Math.abs(car.x - target) < 0.3) { car.x = target; return; }
-        car.x += (target - car.x) * YIELD_LERP;
-    } else {
-        if (Math.abs(car.y - target) < 0.3) { car.y = target; return; }
-        car.y += (target - car.y) * YIELD_LERP;
-    }
-}
-
-function applyYieldDisplacements() {
-    for (const car of activeCars) {
-        if (car.isEmergency) continue;
-        if (car.isTurning) continue;
-        const target = getTargetLateral(car);
-        if (target === null) continue;
-        
-        // Detectar si debe volver (target es base y está desplazado actualmente)
-        const currentLateral = (car.direction === 'S' || car.direction === 'N') ? car.x : car.y;
-        const isCurrentlyShifted = (currentLateral !== car._baseLateral);
-        const shouldReturn = (target === car._baseLateral && isCurrentlyShifted);
-        
-        if (shouldReturn) {
-            // Si está intentando volver pero tiene delay, esperar
-            if (car.returnDelay === undefined) {
-                car.returnDelay = 45;  // ~0.75 segundos a 60 FPS
-            }
-            
-            if (car.returnDelay > 0) {
-                car.returnDelay--;
-                continue;  // No mover este frame, mantener posición
-            }
-        } else {
-            // Resetear delay cuando no está volviendo
-            car.returnDelay = undefined;
-        }   
-
-        smoothLateral(car, target);
-    }
 }
 
 function buildEmergencyElement(type, carId) {
@@ -265,6 +123,7 @@ function createEmergencyVehicle(from, to, type) {
         element:         carGroup,
         type:            'car',
         subtype:         type,
+        originalFrom:     from,
         from:            from,
         to:              to,
         tlId:            `tl-${from}-${to}`,
@@ -291,12 +150,6 @@ function createEmergencyVehicle(from, to, type) {
 // PRIORIDAD — sólo los coches en el MISMO CARRIL y POR DELANTE de la
 // emergencia se comportan como si tuvieran semáforo rojo. El resto del
 // tráfico circula con normalidad.
-//
-// "Mismo carril" se entiende como:
-//   - misma dirección de avance que la emergencia, y
-//   - posición lateral (el eje perpendicular al avance) dentro de
-//     LANE_TOL respecto a la emergencia (o a su carril de spawn si la
-//     emergencia todavía no ha aparecido).
 // =====================================================
 
 const EMG_LANE_TOL = 22;
@@ -330,24 +183,6 @@ function releaseEmergencyRoute(carId) {
     refreshPedestrianBlocks();
 }
 
-/**
- * Indica si `car` está por delante de un punto `frontCoord` en su
- * dirección de avance. Si `frontCoord` es null, devuelve true (para la
- * pre-reserva: todavía no hay emergencia, así que cualquier coche en el
- * carril cuenta como "delante").
- */
-function _carIsAheadOfPoint(car, direction, frontCoord) {
-    if (frontCoord === null || frontCoord === undefined) return true;
-    const carRear = getRearCoord(car);
-    switch (direction) {
-        case 'S': return carRear > frontCoord;
-        case 'N': return carRear < frontCoord;
-        case 'E': return carRear > frontCoord;
-        case 'O': return carRear < frontCoord;
-    }
-    return false;
-}
-
 function _carLateralFor(car) {
     if (car._baseLateral !== undefined) return car._baseLateral;
     return (car.direction === 'S' || car.direction === 'N') ? car.x : car.y;
@@ -375,12 +210,7 @@ function refreshEmergencyFlags() {
     // (dirección + lateral). Cualquier coche que NO esté en ese carril
     // (otra dirección, u otro carril dentro de la misma dirección) queda
     // forzado a no entrar en la intersección hasta que la emergencia salga.
-    //
-    // Los coches que sí están en el mismo carril y por delante de la
-    // emergencia se gestionan en moveCar() mediante `porDelanteDeEmergencia`,
-    // que tiene precedencia sobre `emergencyForced` y les permite ignorar
-    // los semáforos para dejar paso. Por eso aquí los excluimos del flag
-    // (no es estrictamente necesario, pero deja el estado más limpio).
+
     const activeLanes = [];
     for (const route of activeEmergencyRoutes) {
         const emgCar = emergencyVehicles.find(e => e.id === route.carId);
@@ -420,7 +250,7 @@ function refreshEmergencyFlags() {
         }
 
         // Otro carril (otra dirección o el mismo `from` por otro carril)
-        // → bloqueado: no debe entrar en la intersección hasta que la
+        // : bloqueado: no debe entrar en la intersección hasta que la
         // emergencia haya salido de ella.
         car.emergencyForced = true;
     }
@@ -436,35 +266,10 @@ function refreshEmergencyFlags() {
 
 // =====================================================
 // PRIORIDAD DEL VEHÍCULO ESPECIAL SOBRE LOS PEATONES
-//
 // Si hay un vehículo especial activo aproximándose a un paso de cebra,
 // el botón de peatones de ese lado queda bloqueado temporalmente.
 // =====================================================
 
-/**
- * Determina qué pasos de cebra (por dirección de peatón) debe bloquear
- * una emergencia según su ruta actual.
- *
- * La emergencia circula en la dirección `emergencyDir` y puede bloquear
- * los cebras cuya dirección de peatón sea perpendicular a dicha marcha.
- *
- * Mapeamos dirección de avance de emergencia → IDs de botones peatonales
- * que comparten calzada con ese avance:
- *   S (baja por la calle N-S) → cebras N (tlp-N-*) y S (tlp-S-*)
- *   N (sube por la calle N-S) → ídem
- *   E (avanza por la calle O-E) → cebras O (tlp-O-*) y E (tlp-E-*)
- *   O (avanza por la calle O-E) → ídem
- */
-/**
- * Actualiza el estado bloqueado/desbloqueado de todos los botones peatonales
- * según las rutas de emergencia activas.
- *
- * Sólo se bloquean los botones de las direcciones ORIGEN y DESTINO de la
- * ruta de emergencia (los pasos de cebra que la ambulancia atraviesa).
- * También se bloquea el botón de enviar emergencia mientras haya alguna
- * ruta activa, para evitar lanzar otra hasta que la actual salga de la
- * intersección.
- */
 function refreshPedestrianBlocks() {
     const buttonsToBlock = new Set();
 
@@ -484,7 +289,7 @@ function refreshPedestrianBlocks() {
 
         if (buttonsToBlock.has(btnId)) {
             btn.disabled = true;
-            btn.title = 'Vehículo de emergencia en tránsito';
+            btn.title = 'Vehículo de emergencia en intersección';
         } else {
             btn.disabled = false;
             btn.title = '';
@@ -496,7 +301,7 @@ function refreshPedestrianBlocks() {
     if (sendBtn) {
         if (activeEmergencyRoutes.length > 0) {
             sendBtn.disabled = true;
-            sendBtn.title = 'Vehículo de emergencia en tránsito';
+            sendBtn.title = 'Vehículo de emergencia en intersección';
             sendBtn.style.opacity = '0.5';
             sendBtn.style.cursor = 'not-allowed';
         } else {
@@ -515,10 +320,9 @@ function refreshPedestrianBlocks() {
 function moveEmergencyVehicle(car) {
     if (!car.active) return;
 
-    // ── El vehículo de emergencia sólo puede ignorar los semáforos peatonales
-    //    de su dirección de origen (car.direction / car.from) y de su dirección
-    //    de destino (car.to). El resto de peatonales y SIEMPRE los del tren se
-    //    respetan.
+    // El vehículo de emergencia sólo puede ignorar los semáforos peatonales
+    // de su dirección de origen (car.direction / car.from) y de su dirección
+    // de destino (car.to). SIEMPRE se respetan los del tren
     if (!car.isTurning) {
         const checks = (typeof getExtraStopChecks === 'function')
             ? getExtraStopChecks(car)
@@ -538,8 +342,7 @@ function moveEmergencyVehicle(car) {
         if (car.isStopped) car.isStopped = false;
     }
 
-    // ── Distancia de seguridad: la emergencia NO se superpone con otros vehículos ──
-    // Distancia de seguridad ampliada para los vehículos de emergencia.
+    // Distancia de seguridad: la emergencia NO se superpone con otros vehículos
     const EMERGENCY_SAFE_DISTANCE = MIN_SAFE_DISTANCE * 2;
     if (!car.isTurning) {
         for (const other of activeCars) {
@@ -556,8 +359,8 @@ function moveEmergencyVehicle(car) {
         car.isStopped = false;
     }
 
-    // ── Durante el giro: comprobar si hay un vehículo muy cerca en la dirección
-    //    de DESTINO para evitar solapamiento (especialmente con furgonetas/camiones)
+    // Durante el giro: comprobar si hay un vehículo muy cerca en la dirección
+    // de DESTINO para evitar solapamiento (especialmente con furgonetas/camiones)
     if (car.isTurning && car.turnData) {
         const td = car.turnData;
         // Posición aproximada del frente de la emergencia en el eje de destino
@@ -584,6 +387,29 @@ function moveEmergencyVehicle(car) {
             }
             if (gap >= 0 && gap < TURNING_SAFE_DISTANCE) {
                 // Pausar el giro sin resetear su progreso
+                updateCarTransform(car);
+                return;
+            }
+        }
+    }
+
+    // Solapamiento durante giro a la derecha: comprobar distancia con otros
+    // vehículos que también estén girando y cuya trayectoria comparte el arco.
+    if (car.isTurning && isRightTurn(car.originalFrom ?? car.from, car.to)) {
+        for (const other of activeCars) {
+            if (other.id === car.id) continue;
+            // Solo interesa el mismo par from→to (mismo arco de giro)
+            const otherFrom = other.originalFrom ?? other.from;
+            if (!(other.isTurning && isRightTurn(otherFrom, other.to))) continue;
+            if (otherFrom !== (car.originalFrom ?? car.from) || other.to !== car.to) continue;
+
+            // Distancia euclídea entre los dos vehículos durante el giro
+            const dx = car.x - other.x;
+            const dy = car.y - other.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const TURN_OVERLAP_SAFE = MIN_SAFE_DISTANCE * 2;
+
+            if (dist < TURN_OVERLAP_SAFE) {
                 updateCarTransform(car);
                 return;
             }
@@ -652,7 +478,7 @@ function moveEmergencyVehicle(car) {
 
     updateCarTransform(car);
 
-    // ── Liberar la ruta de emergencia al salir de la INTERSECCIÓN ────────────
+    // Liberar la ruta de emergencia al salir de la INTERSECCIÓN
     // Una vez la ambulancia ha cruzado la intersección, los vehículos de las
     // demás direcciones pueden volver a circular con normalidad (no hay que
     // esperar a que la ambulancia desaparezca de la pantalla).
@@ -668,8 +494,16 @@ function moveEmergencyVehicle(car) {
         }
         if (outOfIntersection) {
             car._routeReleased = true;
-            releaseEmergencyRoute(car.id);
-            refreshPedestrianBlocks();
+            const releaseDelay = isRightTurn(car.originalFrom, car.to) ? 1500 : 0;
+            if (releaseDelay === 0) {
+                releaseEmergencyRoute(car.id);
+                refreshPedestrianBlocks()
+            } else {
+                setTimeout(() => {
+                    releaseEmergencyRoute(car.id);
+                    refreshPedestrianBlocks();
+                }, releaseDelay);
+            }
         }
     }
 
@@ -681,14 +515,23 @@ function moveEmergencyVehicle(car) {
     if (outOfBounds) {
         car.active = false;
         if (car.element) car.element.remove();
-
         emergencyVehicles = emergencyVehicles.filter(e => e.id !== car.id);
         const idx = activeCars.findIndex(c => c.id === car.id);
         if (idx !== -1) activeCars.splice(idx, 1);
-
-        if (!car._routeReleased) releaseEmergencyRoute(car.id);
-        // Al salir de escena, desbloquear peatones que ya no tienen emergencia
-        refreshPedestrianBlocks();
+        if (!car._routeReleased) {
+            const releaseDelay = isRightTurn(car.originalFrom, car.to) ? 1500 : 0;
+            if (releaseDelay === 0) {
+                releaseEmergencyRoute(car.id);
+                refreshPedestrianBlocks();
+            } else {
+                setTimeout(() => {
+                    releaseEmergencyRoute(car.id);
+                    refreshPedestrianBlocks();
+                }, releaseDelay);
+            }
+        } else {
+            refreshPedestrianBlocks();
+        }
     }
 }
 
@@ -697,18 +540,10 @@ function updateAllEmergency() {
         moveEmergencyVehicle(emergencyVehicles[i]);
     }
 
-    // CAMBIO 3: desplazamiento lateral progresivo (basado en proximidad).
-    // applyYieldDisplacements evalúa en cada frame si cada coche individual
-    // tiene una emergencia CERCA (< PROXIMITY_YIELD_DISTANCE). Cuando la
-    // emergencia adelanta a un coche, getTargetLateral devuelve _baseLateral
-    // y smoothLateral lo devuelve a su carril original de forma suave.
-    // applyYieldDisplacements();  // desactivado: los coches no se apartan
-
     // Recalcular qué coches están "delante de la emergencia en su carril"
     // en cada frame, ya que la emergencia se mueve.
     refreshEmergencyFlags();
 
-    // CAMBIO 2: bloqueo progresivo de botones peatonales según posición actual.
     refreshPedestrianBlocks();
 }
 

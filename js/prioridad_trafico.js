@@ -33,14 +33,6 @@ function todoAlRojoPrioridad() {
     }
 }
 
-// Poner un semáforo específico en verde (el que tiene prioridad)
-function ponerVerdePrioritario(semaphoreCircles) {
-    for (let i = 0; i < semaphoreCircles.length; i++) {
-        semaphoreCircles[i].classList.remove("on");
-    }
-    semaphoreCircles[2].classList.add("on"); // Índice 2 = verde
-}
-
 // Obtener los círculos del semáforo por su ID
 function getSemaphoreCircles(tlId) {
     const semaforo = document.getElementById(tlId);
@@ -187,13 +179,13 @@ function darPrioridad(laneDirection, laneIsExt) {
     // Detener el ciclo normal actual
     clearTimeout(timerActual);
     
-    // PASO 1: Poner todos los semáforos en rojo
+    // Poner todos los semáforos en rojo
     todoAlRojoPrioridad();
     
-    // PASO 2: Obtener los semáforos prioritarios
+    // Obtener los semáforos prioritarios
     const prioritarySemaphores = getPrioritarySemaphores(laneDirection, laneIsExt);
     
-    // PASO 3: Marcar los semáforos prioritarios y cambiar a ámbar (luego verde)
+    // Marcar los semáforos prioritarios y cambiar a ámbar (luego verde)
     for (const semCircles of prioritarySemaphores) {
         if (!semCircles) continue;
         
@@ -213,7 +205,7 @@ function darPrioridad(laneDirection, laneIsExt) {
         }
     }
     
-    // PASO 4: Después de 2 segundos en ámbar, pasar a verde (esperando que el carril esté libre)
+    // Después de 2 segundos en ámbar, pasar a verde (esperando que el carril esté libre)
     setTimeout(() => {
         for (const semCircles of prioritarySemaphores) {
             if (!semCircles) continue;
@@ -259,7 +251,7 @@ function finPrioridad() {
 function finalizarPrioridad() {
     if (!prioridad) return;
     
-    // PASO 1: Poner en ámbar los semáforos que estaban en verde prioritario
+    // Poner en ámbar los semáforos que estaban en verde prioritario
     for (let i = 0; i < semaforos_interseccion.length; i += 3) {
         const rojo = semaforos_interseccion[i];
         const ambar = semaforos_interseccion[i+1];
@@ -271,7 +263,7 @@ function finalizarPrioridad() {
         }
     }
     
-    // PASO 2: Esperar 2 segundos en ámbar y luego restaurar el ciclo normal
+    // Esperar 2 segundos en ámbar y luego restaurar el ciclo normal
     setTimeout(() => {
         // Limpiar marcas de prioridad
         for (let i = 0; i < semaforos_interseccion.length; i++) {

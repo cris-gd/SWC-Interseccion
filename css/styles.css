@@ -51,6 +51,7 @@ header {
     flex-shrink: 0;
     gap: 16px;
 }
+
 /* ─── DARK MODE ─── */
 
 body.dark-mode {
@@ -159,7 +160,6 @@ body.dark-mode {
     opacity: 0.8;
 }
 
-/* authors: sits below title visually, same column */
 .authors {
     font-family: 'Share Tech Mono', monospace;
     font-size: 0.66rem;
@@ -248,6 +248,9 @@ main {
     flex-direction: column;
     gap: 4px;
     position: relative;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 10px;
+    padding: 8px;
 }
  
 .vol-block-title {
@@ -267,6 +270,12 @@ main {
     background: var(--surface);
     border: 1px solid var(--border-soft);
     border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.vol-group:hover {
+    border-color: var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
  
 .vol-group-header {
@@ -361,7 +370,7 @@ main {
 
 }
 
-/* Estilos individuales en cruz */
+/* Estilos individuales en cruz para botón peatones*/
 #boton-peatones-N { 
     background: linear-gradient(135deg, var(--surface), #e3f2fd); 
     grid-column: 2;
@@ -543,22 +552,6 @@ select:focus {
     width: 80px;
 }
 
-/* ─── MEJORAS GENERALES AL PANEL ─── */
-.vol-block {
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 10px;
-    padding: 8px;
-}
-
-.vol-group {
-    transition: all 0.2s ease;
-}
-
-.vol-group:hover {
-    border-color: var(--accent);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
 /* ─── ETIQUETAS DE VOLUMEN ─── */
 .vol-label {
     font-family: 'Share Tech Mono', monospace;
@@ -602,9 +595,7 @@ select:focus {
     position: relative;
 }
 
-/* ═══════════════════════════════════════
-   SVG — ROAD ELEMENTS
-═══════════════════════════════════════ */
+/* SVG — ROAD ELEMENTS */
 
 .grass        { fill: var(--svg-grass); }
 .kerb         { fill: var(--svg-kerb); }
@@ -634,16 +625,12 @@ select:focus {
     opacity:      0.9;
 }
 
-/* ═══════════════════════════════════════
-   SVG — DIRECTION ARROWS
-═══════════════════════════════════════ */
+/* SVG — DIRECTION ARROWS */
 
 .direction-arrow         { opacity: 0.65; }
 .direction-arrow polygon { fill: white; }
 
-/* ═══════════════════════════════════════
-   SVG — TRAFFIC LIGHT HOUSINGS & BULBS
-═══════════════════════════════════════ */
+/* SVG — TRAFFIC LIGHT HOUSINGS & BULBS */
 
 .tl-housing {
     fill:         var(--tl-housing-fill);
@@ -663,16 +650,12 @@ select:focus {
 
 
 
-/* ═══════════════════════════════════════
-   SVG — TURN ARROWS ON TRAFFIC LIGHTS
-═══════════════════════════════════════ */
+/* SVG — TURN ARROWS ON TRAFFIC LIGHTS */
 
 .tl-arrow         { opacity: 0.9; }
 .tl-arrow polygon { fill: black; }
 
-/* ═══════════════════════════════════════
-   SVG — COMPASS LABELS
-═══════════════════════════════════════ */
+/* SVG — COMPASS LABELS */
 
 .compass {
     font-family:   'Barlow Condensed', sans-serif;
@@ -681,9 +664,7 @@ select:focus {
     fill:          white;
     letter-spacing: 2px;
 }
-/* ═══════════════════════════════════════
-   RAILWAY CROSSING
-═══════════════════════════════════════ */
+/* RAILWAY CROSSING */
 .rail-ballast {
     fill: #6b6358;
     opacity: 0.88;
@@ -718,9 +699,7 @@ select:focus {
     opacity: 0.9;
 }
 
-/* ═══════════════════════════════════════
-   PEATONES
-═══════════════════════════════════════ */
+/* PEATONES */
 
 @keyframes ped-N-mover {
     from { transform: translate(220px,  65px); }
@@ -792,15 +771,7 @@ select:focus {
     .peaton, .peaton * { animation: none; visibility: hidden; }
 }
 
-
-
-
-
-
-
-
-
-
+/* Animar tren */
 #train {
     visibility: hidden;
 }

@@ -2,7 +2,7 @@
 // CONFIGURACIÓN Y VARIABLES GLOBALES
 // =====================================================
 
-//Sliders control volumen tráfico para cada dirección (origen -> destino)
+//Sliders control volumen tráfico para cada dirección (origen - destino)
 const sliderToRoute = {
     // NORTE (origen)
     'slider-N-S': { from: 'N', to: 'S', tlId: 'tl-N-S' },
@@ -187,18 +187,13 @@ function shouldStopForCarAhead(car) {
         const emergencyTurn = `${other.from}-${other.to}`;
         const leftTurns = ['N-O', 'S-E', 'E-S', 'O-N'];
         if (leftTurns.includes(emergencyTurn)) {
-            // Calcular si el coche está en la zona de conflicto del giro
-            const conflictX = (other.direction === 'S' || other.direction === 'N') ? other.x : other.y;
-            const conflictY = (other.direction === 'E' || other.direction === 'O') ? other.y : other.x;
-            
-            // Simplificado: si la emergencia está cerca del centro de la intersección,
+            // si la emergencia está cerca del centro de la intersección,
             // los coches perpendiculares deben detenerse
             const isNearIntersection = (other.x > 220 && other.x < 460 && other.y > 220 && other.y < 460);
             if (isNearIntersection) {
                 const stopLine = STOP_LINES[car.direction];
                 if (stopLine !== undefined) {
                     const front = getFrontCoord(car);
-                    const len = getVehicleLength(car.type);
                     const pastLine = (car.direction === 'S' || car.direction === 'E')
                         ? front > stopLine + 10
                         : front < stopLine - 10;
@@ -291,33 +286,9 @@ function isSpawnBlocked(from, to) {
 // =====================================================
 // CAPACIDAD DE LA ZONA DE COLA (entre cebra y stop line)
 // =====================================================
-//
-// El espacio entre el paso de cebra y la línea de stop del semáforo
-// principal tiene una capacidad física limitada. Si ese espacio está
-// lleno, los vehículos que llegan deben detenerse ANTES del cebra,
-// no en él ni dentro de él.
-//
-// Zona de cola por dirección (coordenada del eje de avance):
-//   S → y ∈ [82, 230]   (cebra norte termina en y≈80, stop en y=230)
-//   N → y ∈ [450, 578]  (stop en y=450, cebra sur empieza en y≈580)
-//   E → x ∈ [82, 230]   (cebra oeste termina en x≈80, stop en x=230)
-//   O → x ∈ [450, 588]  (stop en x=450, cebra este empieza en x≈590)
-//
-// Espacio útil ≈ 148 px. La capacidad efectiva descuenta un hueco de
-// seguridad por vehículo: QUEUE_CAPACITY_PX = 138 px.
-//
-// Longitudes de vehículo (incluyendo cabina):
-//   car   → 16 px
-//   van   → 29 px
-//   truck → 45 px
-//
-// Esto hace que las siguientes combinaciones llenen la zona:
-//   2 camiones + cualquier otro → no caben (45+10 + 45+10 = 110; + 16+10 > 138)
-//   1 camión + 4 coches         → no caben (45+10 + (16+10)×3 + 16 = 149 > 138)
-//   5 coches + 1 furgoneta      → no caben ((16+10)×4 + 16+10 + 29 = 159 > 138)
-//   5 coches                    → el 6.º no cabe ((16+10)×4 + 16 = 120; +16+10 = 146 > 138)
 
-const QUEUE_CAPACITY_PX = 138;
+// El espacio entre el paso de cebra y la línea de stop del semáforo
+// si está lleno, los vehículos que llegan deben detenerse ANTES del paso
 
 // Límites de la zona de cola por dirección (coordenada del eje de avance)
 const QUEUE_ZONE = {
@@ -335,35 +306,17 @@ const TRAIN_QUEUE_ZONE_O = { axisMin: 621, axisMax: 745 };
 // Zona entre el cebra Este y las vías para dirección E (frente = car.x + len, x creciente).
 // Impide que coches en dirección E queden parados encima del cebra o de las vías.
 // axisMin es el FINAL del cebra Este (x≈620) y entryMin es la línea donde
-// empezamos a reservar plaza (x≈585). Así cuentan también los coches que ya
-// están comprometidos con el cruce aunque su carrocería aún no haya entrado
-// físicamente en el tramo 620–744. Esto evita que varios coches muy juntos
-// "crean" que caben y el último acabe detenido sobre el paso de cebra.
+// empezamos a reservar plaza (x≈585).
 const TRAIN_QUEUE_ZONE_E = { axisMin: 620, axisMax: 744, entryMin: 585 };
 const EAST_CROSSWALK_X = { min: 590, max: 620 };
 
-/**
- * Calcula el ESPACIO LIBRE (px) en la zona de cola del carril dado, medido
- * entre la línea de stop (cebra) y la trasera del último coche que ya está
- * (parcial o totalmente) dentro de la zona.
- *
- * Direcciones de avance:
- *   S/E → avanzan hacia coordenadas crecientes; el "fondo" de la cola
- *         (más alejado del cebra) está en axisMax. La trasera del último
- *         coche en cola es el bodyMin más PEQUEÑO. Espacio libre = bodyMin - axisMin.
- *   N/O → avanzan hacia coordenadas decrecientes; el "fondo" está en axisMin.
- *         La trasera del último coche es el bodyMax más GRANDE.
- *         Espacio libre = axisMax - bodyMax.
- *
- * Si no hay coches en la zona, el espacio libre es toda la zona.
- */
+
 function getQueueFreeSpace(direction, laneCoord, selfId, zone) {
-    // Enfoque por CAPACIDAD: la zona tiene una longitud total fija
-    // (axisMax - axisMin). Calculamos la suma de longitudes ocupadas por
-    // los vehículos presentes (o ya comprometidos a entrar) y devolvemos
-    // el espacio libre como (capacidad - ocupado). Esto evita falsos
-    // positivos/negativos del enfoque "rearmost" cuando un coche está
-    // entrando todavía a la zona desde el área pre-cebra (entryMin).
+    /*
+    * Calcula el ESPACIO LIBRE (px) en la zona de cola del carril dado, medido
+    * entre la línea de stop (cebra) y la trasera del último coche que ya está
+    * (parcial o totalmente) dentro de la zona.
+    */
     const LANE_TOL = 14;
     const capacity = zone.axisMax - zone.axisMin;
 
@@ -410,13 +363,14 @@ function getQueueFreeSpace(direction, laneCoord, selfId, zone) {
     return Math.max(0, capacity - occupied);
 }
 
-/**
- * Devuelve true si la zona de cola del carril de `car` no tiene espacio
- * libre suficiente para albergar un vehículo adicional de ese tipo.
- * Solo se evalúa si el coche aún no ha entrado en la zona (está en o
- * antes del cebra); una vez dentro, debe poder avanzar para despejarla.
- */
+
 function isQueueZoneFull(car) {
+    /*
+     * Devuelve true si la zona de cola del carril de car no tiene espacio
+     * libre suficiente para albergar un vehículo adicional de ese tipo.
+     * Solo se evalúa si el coche aún no ha entrado en la zona (está en o
+     * antes del cebra); una vez dentro, debe poder avanzar para despejarla.
+     */
     const zone = QUEUE_ZONE[car.direction];
     if (!zone) return false;
 
@@ -434,13 +388,13 @@ function isQueueZoneFull(car) {
     return free < needed;
 }
 
-/**
- * Devuelve true si la zona entre el cebra Este y las vías del tren
- * no tiene espacio para un vehículo adicional (dirección O).
- * Mide el espacio libre real (no la ocupación) para no infravalorar
- * la capacidad real de la zona.
- */
 function isTrainQueueZoneFull(car) {
+    /*
+     * Devuelve true si la zona entre el cebra Este y las vías del tren
+     * no tiene espacio para un vehículo adicional (dirección O).
+     * Mide el espacio libre real (no la ocupación) para no infravalorar
+     * la capacidad real de la zona.
+     */
     if (car.direction !== 'O') return false;
     const front = getFrontCoord(car);
     // Si el frente ya está dentro de la zona, no se le bloquea.
@@ -451,21 +405,16 @@ function isTrainQueueZoneFull(car) {
     return free < needed;
 }
 
-/**
- * Devuelve true si la zona entre el cebra Este y las vías del tren
- * no tiene espacio para un vehículo adicional (dirección E).
- * Importante: la comprobación se mantiene activa hasta que el coche
- * cruza el cebra (front > axisMin); así evitamos que un coche entre
- * confiado y luego se quede ligeramente montado sobre las vías al
- * frenar por el vehículo de delante.
- */
 function isTrainQueueZoneFullE(car) {
+    /*
+    * Devuelve true si la zona entre el cebra Este y las vías del tren
+    * no tiene espacio para un vehículo adicional (dirección E).
+    */
     if (car.direction !== 'E') return false;
 
     const front = getFrontCoord(car);
 
-    // No re-anclar coches que ya han entrado físicamente en el paso de cebra:
-    // si se les devolviera a x=585 aparecería el "teletransporte".
+    // No re-anclar coches que ya han entrado físicamente en el paso de cebra
     if (front >= EAST_CROSSWALK_X.min) return false;
 
     const LANE_TOL = 14;
@@ -474,7 +423,7 @@ function isTrainQueueZoneFullE(car) {
     const capacity = ZONE_MAX - ZONE_MIN;         // tamaño físico de la zona
 
     // Suma de longitudes (carrocería + distancia de seguridad) de todos los
-    // vehículos que YA están ocupando o comprometidos con la zona cebra→vías
+    // vehículos que YA están ocupando o comprometidos con la zona cebra:vías
     // del mismo carril. Comprometidos = su frente ha cruzado el inicio del
     // paso de cebra (x ≥ EAST_CROSSWALK_X.min) y aún no han pasado las vías.
     let occupied = 0;
@@ -503,48 +452,6 @@ function isTrainQueueZoneFullE(car) {
 // Un coche dirección E NO debe quedar parado con su cuerpo dentro de [751, 790].
 const RAIL_ZONE_X = { min: 751, max: 790 };
 
-/**
- * True si un coche en dir E que está esperando ante las vías (front≈744) NO
- * tiene espacio garantizado al otro lado para alojar su longitud completa.
- * Mira al coche que tiene delante en el mismo carril; si su trasera no está
- * suficientemente más allá de las vías, no puede cruzar todavía.
- */
-function hasSpaceBeyondRailsE(car) {
-    if (car.direction !== 'E') return true;
-    const len = getVehicleLength(car.type);
-    const LANE_TOL = 14;
-    let nearestRear = Infinity; // bodyMin del coche más cercano por delante
-    for (const other of activeCars) {
-        if (other.id === car.id) continue;
-        if (other.direction !== 'E') continue;
-        if (Math.abs(other.y - car.y) >= LANE_TOL) continue;
-        const bodyMin = other.x; // trasera (E avanza con x creciente, anchor=x)
-        if (bodyMin <= car.x) continue; // está detrás
-        if (bodyMin < nearestRear) nearestRear = bodyMin;
-    }
-    if (nearestRear === Infinity) return true;
-    // Para que la trasera del coche quepa más allá de las vías:
-    // (nearestRear - MIN_SAFE_DISTANCE) - len  >=  RAIL_ZONE_X.max
-    return (nearestRear - MIN_SAFE_DISTANCE - len) >= RAIL_ZONE_X.max;
-}
-
-/** Análogo para dir O (avanza con x decreciente). */
-function hasSpaceBeyondRailsO(car) {
-    if (car.direction !== 'O') return true;
-    const len = getVehicleLength(car.type);
-    const LANE_TOL = 14;
-    let nearestRear = -Infinity; // bodyMax del coche más cercano por delante
-    for (const other of activeCars) {
-        if (other.id === car.id) continue;
-        if (other.direction !== 'O') continue;
-        if (Math.abs(other.y - car.y) >= LANE_TOL) continue;
-        const bodyMax = other.x; // trasera (O: anchor=x es la parte de mayor x)
-        if (bodyMax >= car.x) continue; // está detrás (en el sentido de avance)
-        if (bodyMax > nearestRear) nearestRear = bodyMax;
-    }
-    if (nearestRear === -Infinity) return true;
-    return (nearestRear + MIN_SAFE_DISTANCE + len) <= RAIL_ZONE_X.min;
-}
 
 // =====================================================
 // GENERACIÓN DE COCHES
@@ -814,23 +721,15 @@ function checkExtraLight(car, tlId, stopLine) {
     const esPeatonalCebraEste = (tlId === 'tlp-E-N' || tlId === 'tlp-E-S') && car.direction === 'E';
     const colaCebraEsteLL = esPeatonalCebraEste && isTrainQueueZoneFullE(car);
 
-    // Nota: no se controla espacio MÁS ALLÁ de las vías. Después de las
-    // vías no hay paso de cebra ni semáforo, así que si el semáforo del
-    // tren está en verde, los coches simplemente pasan.
-
     if (isGreen && !colaLlena && !colaTrenLlena && !colaTrenLlenaE && !colaCebraEsteLL) return false;
 
     const front = getFrontCoord(car);
     const len   = getVehicleLength(car.type);
     const dir   = car.direction;
 
-    // Punto de no retorno: ya cruzó la línea → dejar pasar.
-    // En las vías NO usamos el margen genérico de 10 px: hasta que el frente
-    // entra realmente en la zona ferroviaria, el coche todavía puede y debe
-    // anclarse a la línea de stop. Esto evita el pequeño avance que luego le
-    // permitía cruzar con el semáforo en verde aunque no hubiera hueco real.
+    // Punto de no retorno: ya cruzó la línea : dejar pasar.
     if (colaCebraEsteLL) {
-        // Si la zona cebra→vías está llena, no aplicamos los 10px de margen:
+        // Si la zona cebra:vías está llena, no aplicamos los 10px de margen:
         // hasta que el frente no haya salido del cebra, todavía debe anclarse
         // a la línea previa (585) para no quedarse parado encima del paso.
         if (front >= TRAIN_QUEUE_ZONE_E.axisMin) return false;
@@ -846,7 +745,7 @@ function checkExtraLight(car, tlId, stopLine) {
         }
     }
 
-    // El frente no ha llegado a la línea → no hace falta parar aún
+    // El frente no ha llegado a la línea : no hace falta parar aún
     switch (dir) {
         case 'S': if (front < stopLine) return false; break;
         case 'N': if (front > stopLine) return false; break;
@@ -870,7 +769,7 @@ function shouldStopAtTrafficLight(car) {
     if (car.wasStoppedByExtraLight) {
         const extraChecks = getExtraStopChecks(car);
 
-        // Si YA no está bloqueado por ningún semáforo secundario → avanzar
+        // Si YA no está bloqueado por ningún semáforo secundario : avanzar
         const stillBlocked = extraChecks.some(({ tlId, stopLine }) =>
             checkExtraLight(car, tlId, stopLine)
         );
@@ -884,7 +783,7 @@ function shouldStopAtTrafficLight(car) {
         return true;
     }
 
-    // ── 1. Semáforo principal de la ruta ────────────────────────────────────
+    //1. Semáforo principal de la ruta
     const isGreen = getTrafficLightState(car.tlId);
     if (isGreen) {
         car.isStopped = false;
@@ -925,7 +824,7 @@ function shouldStopAtTrafficLight(car) {
         }
     }
 
-    // ── 2. Semáforos peatonales y ferroviarios ───────────────────────────────
+    // 2. Semáforos peatonales y ferroviarios
     const extraChecks = getExtraStopChecks(car);
     for (const { tlId, stopLine } of extraChecks) {
         if (checkExtraLight(car, tlId, stopLine)) {
@@ -1052,12 +951,6 @@ function shouldStartTurn(car) {
 
 
 // Detiene un coche normal ante una emergencia activa en su vía.
-// IMPORTANTE: la emergencia impide ENTRAR a la intersección, pero NO debe
-// hacer que los coches se queden inmóviles antes de tiempo. Si todavía
-// están lejos de la stop-line principal y los semáforos peatonales/tren
-// que tienen delante están en verde, deben poder avanzar (respetando esos
-// semáforos extra de manera normal). Solo se anclan en la stop-line
-// principal cuando llegan a ella.
 function _shouldStopForcedByEmergency(car) {
     const front = getFrontCoord(car);
     const stopLine = STOP_LINES[car.direction];
@@ -1115,12 +1008,11 @@ function moveCar(car) {
     // Los vehículos de emergencia tienen su propio bucle de movimiento
     if (car.isEmergency) return;
 
-    // ── 1. Evaluar semáforo ──────────────────────────────────────────────────
+    // 1. Evaluar semáforo
     // Lógica con vehículo de emergencia activo:
     //  - Coches con misma dirección de movimiento que la emergencia y POR DELANTE
-    //    de ella → ignoran semáforo principal y peatonales, pero respetan el del tren.
-    //  - Coches con otra dirección → emergencyForced (no acceden a la intersección).
-    //  - Resto → comportamiento normal.
+    //    de ella : ignoran semáforo principal y peatonales, pero respetan el del tren.
+    //  - Coches con otra dirección : emergencyForced (no acceden a la intersección).
     let blockedByLight;
     let porDelanteDeEmergencia = false;
     // Sólo cuenta como "emergencia que me sigue" si está en MI MISMO CARRIL
@@ -1191,10 +1083,10 @@ function moveCar(car) {
         blockedByLight = shouldStopAtTrafficLight(car);
     }
 
-    // ── 2. Evaluar distancia de seguridad ────────────────────────────────────
+    // 2. Evaluar distancia de seguridad 
     const blockedByCar = shouldStopForCarAhead(car);
 
-    // ── 3. Lógica de movimiento ──────────────────────────────────────────────
+    // 3. Lógica de movimiento 
     const canMove = !blockedByLight && !car.isStopped && !blockedByCar;
 
     // Compactar cola: el coche está parado (semáforo rojo) pero hay hueco delante.
@@ -1303,10 +1195,10 @@ function moveCar(car) {
                 delete car.startRotation;
                 // La referencia lateral cambia porque el coche ahora circula en otra dirección
                 if (car.direction === 'S' || car.direction === 'N') {
-                    // Ahora se mueve verticalmente → lateral = coordenada X
+                    // Ahora se mueve verticalmente: lateral = coordenada X
                     car._baseLateral = car.x;
                 } else {
-                    // Ahora se mueve horizontalmente → lateral = coordenada Y
+                    // Ahora se mueve horizontalmente : lateral = coordenada Y
                     car._baseLateral = car.y;
                 }
             } else {
@@ -1409,7 +1301,7 @@ function startGenerationForRoute(routeKey, volume) {
 
     generationIntervals[routeKey] = setInterval(() => {
         // Sólo se bloquea la generación si una emergencia ocupa el MISMO
-        // carril de spawn que esta ruta. Otras rutas (mismo `from` pero
+        // carril de spawn que esta ruta. Otras rutas (mismo from pero
         // distinto carril, u otras direcciones) se generan con normalidad.
         const myStart = getStartPosition(route.from, route.to);
         const emergencyOnSameSpawn = typeof activeEmergencyRoutes !== 'undefined' &&

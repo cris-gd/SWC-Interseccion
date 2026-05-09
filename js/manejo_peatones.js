@@ -29,16 +29,15 @@ const peatonPendienteTimeout = { N: null, S: null, E: null, O: null };
 // En ese caso la emergencia NO cancela el cruce, deja que termine.
 const peatonCruzando = { N: false, S: false, E: false, O: false };
 
-/**
- * Cancela el cruce peatonal de una dirección si todavía no ha empezado
- * (la animación no se ha iniciado). Llamado desde manejo_vehiculos_especiales.js
- * cuando se activa una ruta de emergencia.
- * 
- * El semáforo peatonal sigue su ciclo completo (ámbar → rojo → verde)
- * aunque el peatón no cruce, para mantener coherencia visual.
- * Los vehículos ya están bloqueados por la emergencia, así que no afecta.
- */
+
 function cancelarPeatonPendiente(dir) {
+    /**
+     * Cancela el cruce peatonal de una dirección si todavía no ha empezado
+     * (la animación no se ha iniciado). Llamado desde manejo_vehiculos_especiales.j
+     * El semáforo peatonal sigue su ciclo completo (ámbar → rojo → verde)
+     * aunque el peatón no cruce, para mantener coherencia visual.
+     */
+
     if (peatonCruzando[dir]) return; // ya cruzando → no cancelar
     if (!bloqueando[dir]) return;    // no había nada pendiente
 

@@ -16,36 +16,7 @@ barrierSouth.classList.add('barrera-sur');
 const train = document.getElementById('train');
 let bloqueo_tren = false;
 
-function bloquearVehiculosT() {
-    for (let i = 0; i < direc_E.length; i += 3) {
-        const rojo  = direc_E[i];
-        const ambar = direc_E[i+1];
-        const verde = direc_E[i+2];
 
-        if (verde.classList.contains("on")) {
-            verde.classList.remove("on");
-            ambar.classList.add("on");
-            rojo.classList.add("trainblock");
-            setTimeout(() => {
-                ambar.classList.remove("on");
-                rojo.classList.add("on");
-            }, 5000);
-        } else if (ambar.classList.contains("on")) {
-            rojo.classList.add("trainblock");
-            setTimeout(() => {
-                ambar.classList.remove("on");
-                rojo.classList.add("on");
-            }, 5000);
-        } else {
-            rojo.classList.add("trainblock");
-        }
-    }
-}
-function desbloquearVehiculosT() {
-    for (let i = 0; i < direc_E.length; i += 3) {
-        direc_E[i].classList.remove("trainblock");
-    }
-}
 function finBloqueoT(circles, index) {
     if(!prioridad){
         // Si cualquier luz del grupo está bloqueada, no tocar nada
@@ -146,7 +117,6 @@ function ejecutarCiclo() {
     // 1. Poner ámbar durante 5 segundos (aviso de que van a bajar)
     bloqueo_tren=true;
     ambarTren();
-    bloquearVehiculosT();
     
     // 2. Después de 5 segundos, bajar barreras y poner rojo
     timeoutAmbar = setTimeout(() => {
@@ -162,7 +132,6 @@ function ejecutarCiclo() {
             // 4. Esperar 2 segundos más y poner verde
             timeoutVerde = setTimeout(() => {
                 verdeTren();
-                desbloquearVehiculosT();
                 bloqueo_tren = false;
                 if(bloqueando['E']==false){
                     switch(ciclo_semaforos){
